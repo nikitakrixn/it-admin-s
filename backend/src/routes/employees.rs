@@ -431,16 +431,64 @@ impl EmployeesApi {
                         "new": employee.last_name
                     }));
                 }
+                if old_employee.middle_name != employee.middle_name {
+                    changes.insert("middle_name".to_string(), serde_json::json!({
+                        "old": old_employee.middle_name,
+                        "new": employee.middle_name
+                    }));
+                }
                 if old_employee.email != employee.email {
                     changes.insert("email".to_string(), serde_json::json!({
                         "old": old_employee.email,
                         "new": employee.email
                     }));
                 }
+                if old_employee.phone != employee.phone {
+                    changes.insert("phone".to_string(), serde_json::json!({
+                        "old": old_employee.phone,
+                        "new": employee.phone
+                    }));
+                }
                 if old_employee.status != employee.status {
                     changes.insert("status".to_string(), serde_json::json!({
                         "old": old_employee.status,
                         "new": employee.status
+                    }));
+                }
+                if old_employee.position_id != employee.position_id {
+                    changes.insert("position_id".to_string(), serde_json::json!({
+                        "old": old_employee.position_id,
+                        "new": employee.position_id
+                    }));
+                }
+                if old_employee.department_id != employee.department_id {
+                    changes.insert("department_id".to_string(), serde_json::json!({
+                        "old": old_employee.department_id,
+                        "new": employee.department_id
+                    }));
+                }
+                if old_employee.hire_date != employee.hire_date {
+                    changes.insert("hire_date".to_string(), serde_json::json!({
+                        "old": old_employee.hire_date.map(|d| d.to_string()),
+                        "new": employee.hire_date.map(|d| d.to_string())
+                    }));
+                }
+                if old_employee.termination_date != employee.termination_date {
+                    changes.insert("termination_date".to_string(), serde_json::json!({
+                        "old": old_employee.termination_date.map(|d| d.to_string()),
+                        "new": employee.termination_date.map(|d| d.to_string())
+                    }));
+                }
+                if old_employee.ad_username != employee.ad_username {
+                    changes.insert("ad_username".to_string(), serde_json::json!({
+                        "old": old_employee.ad_username,
+                        "new": employee.ad_username
+                    }));
+                }
+                if old_employee.notes != employee.notes {
+                    changes.insert("notes".to_string(), serde_json::json!({
+                        "old": old_employee.notes,
+                        "new": employee.notes
                     }));
                 }
                 
