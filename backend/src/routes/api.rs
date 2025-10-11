@@ -40,6 +40,10 @@ pub enum ApiTags {
     Computers,
     /// Employee management
     Employees,
+    /// Department management
+    Departments,
+    /// Position management
+    Positions,
     /// Equipment management
     Equipment,
 }
