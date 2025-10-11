@@ -53,50 +53,114 @@
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-          <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 class="text-lg font-medium text-gray-900">Личная информация</h3>
+        <!-- Personal Information -->
+        <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+          <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+              <div class="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+                <Icon name="ri:user-line" class="text-blue-600" />
+              </div>
+              Личная информация
+            </h3>
           </div>
-          <div class="px-6 py-4 space-y-4">
-            <div>
-              <dt class="text-sm font-medium text-gray-500">ФИО</dt>
-              <dd class="mt-1 text-sm text-gray-900">{{ employee.full_name }}</dd>
+          <div class="px-6 py-5 space-y-5">
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:user-3-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">ФИО</dt>
+                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.full_name }}</dd>
+              </div>
             </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Email</dt>
-              <dd class="mt-1 text-sm text-gray-900">{{ employee.email || '-' }}</dd>
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:mail-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                  <a v-if="employee.email" :href="`mailto:${employee.email}`" class="text-primary-600 hover:text-primary-900 transition-colors">
+                    {{ employee.email }}
+                  </a>
+                  <span v-else class="text-gray-400">Не указан</span>
+                </dd>
+              </div>
             </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Телефон</dt>
-              <dd class="mt-1 text-sm text-gray-900">{{ employee.phone || '-' }}</dd>
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:phone-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Телефон</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ employee.phone || 'Не указан' }}</dd>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-          <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 class="text-lg font-medium text-gray-900">Рабочая информация</h3>
+        <!-- Work Information -->
+        <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+          <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-white border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+              <div class="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
+                <Icon name="ri:briefcase-line" class="text-purple-600" />
+              </div>
+              Рабочая информация
+            </h3>
           </div>
-          <div class="px-6 py-4 space-y-4">
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Отдел</dt>
-              <dd class="mt-1 text-sm text-gray-900">{{ employee.department_name || '-' }}</dd>
+          <div class="px-6 py-5 space-y-5">
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:building-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Отдел</dt>
+                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.department_name || 'Не указан' }}</dd>
+              </div>
             </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Должность</dt>
-              <dd class="mt-1 text-sm text-gray-900">{{ employee.position_name || '-' }}</dd>
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:award-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Должность</dt>
+                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.position_name || 'Не указана' }}</dd>
+              </div>
             </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Статус</dt>
-              <dd class="mt-1">
-                <span :class="{
-                  'bg-green-100 text-green-800': employee.status === 'active',
-                  'bg-gray-100 text-gray-800': employee.status === 'inactive',
-                  'bg-red-100 text-red-800': employee.status === 'terminated'
-                }" class="px-2 py-1 text-xs font-medium rounded-full">
-                  {{ statusLabel(employee.status) }}
-                </span>
-              </dd>
+            <div class="flex items-start">
+              <div class="flex-shrink-0">
+                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Icon name="ri:checkbox-circle-line" class="text-gray-600" />
+                </div>
+              </div>
+              <div class="ml-4 flex-1">
+                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</dt>
+                <dd class="mt-1">
+                  <span :class="{
+                    'bg-green-100 text-green-800 ring-1 ring-green-600/20': employee.status === 'active',
+                    'bg-gray-100 text-gray-800 ring-1 ring-gray-600/20': employee.status === 'inactive',
+                    'bg-red-100 text-red-800 ring-1 ring-red-600/20': employee.status === 'terminated'
+                  }" class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full">
+                    <span :class="{
+                      'bg-green-500': employee.status === 'active',
+                      'bg-gray-500': employee.status === 'inactive',
+                      'bg-red-500': employee.status === 'terminated'
+                    }" class="h-1.5 w-1.5 rounded-full mr-2"></span>
+                    {{ statusLabel(employee.status) }}
+                  </span>
+                </dd>
+              </div>
             </div>
           </div>
         </div>

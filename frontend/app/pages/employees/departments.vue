@@ -16,23 +16,25 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Departments -->
-      <div class="bg-white shadow-sm rounded-lg border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h3 class="text-lg font-medium text-gray-900 flex items-center">
-            <Icon name="ri:building-line" class="mr-2 text-primary-600" />
+      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+        <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+            <div class="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+              <Icon name="ri:building-line" class="text-blue-600" />
+            </div>
             Отделы
           </h3>
           <button
             @click="showDepartmentForm = !showDepartmentForm"
-            class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 shadow-sm transition-all"
           >
-            <Icon name="ri:add-line" class="mr-1" />
-            Добавить
+            <Icon :name="showDepartmentForm ? 'ri:close-line' : 'ri:add-line'" class="mr-2" />
+            {{ showDepartmentForm ? 'Отмена' : 'Добавить' }}
           </button>
         </div>
 
         <!-- Add Department Form -->
-        <div v-if="showDepartmentForm" class="px-6 py-4 bg-blue-50 border-b border-blue-100">
+        <div v-if="showDepartmentForm" class="px-6 py-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
           <form @submit.prevent="handleCreateDepartment" class="space-y-3">
             <div>
               <label for="dept_name" class="block text-sm font-medium text-gray-700">
@@ -88,15 +90,21 @@
           <div
             v-for="dept in departments"
             :key="dept.id"
-            class="px-6 py-4 hover:bg-gray-50 transition-colors"
+            class="px-6 py-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent transition-all group"
           >
             <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <h4 class="text-sm font-medium text-gray-900">{{ dept.name }}</h4>
-                <p v-if="dept.description" class="mt-1 text-sm text-gray-500">{{ dept.description }}</p>
-                <p class="mt-1 text-xs text-gray-400">
-                  Сотрудников: {{ dept.employee_count }}
-                </p>
+              <div class="flex items-start flex-1">
+                <div class="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3 group-hover:bg-blue-200 transition-colors">
+                  <Icon name="ri:building-line" class="text-blue-600" />
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-semibold text-gray-900">{{ dept.name }}</h4>
+                  <p v-if="dept.description" class="mt-1 text-sm text-gray-600">{{ dept.description }}</p>
+                  <div class="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <Icon name="ri:user-line" class="mr-1" />
+                    {{ dept.employee_count }} сотрудников
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -104,23 +112,25 @@
       </div>
 
       <!-- Positions -->
-      <div class="bg-white shadow-sm rounded-lg border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <h3 class="text-lg font-medium text-gray-900 flex items-center">
-            <Icon name="ri:briefcase-line" class="mr-2 text-primary-600" />
+      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+        <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-white border-b border-gray-200 flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+            <div class="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
+              <Icon name="ri:briefcase-line" class="text-purple-600" />
+            </div>
             Должности
           </h3>
           <button
             @click="showPositionForm = !showPositionForm"
-            class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 shadow-sm transition-all"
           >
-            <Icon name="ri:add-line" class="mr-1" />
-            Добавить
+            <Icon :name="showPositionForm ? 'ri:close-line' : 'ri:add-line'" class="mr-2" />
+            {{ showPositionForm ? 'Отмена' : 'Добавить' }}
           </button>
         </div>
 
         <!-- Add Position Form -->
-        <div v-if="showPositionForm" class="px-6 py-4 bg-blue-50 border-b border-blue-100">
+        <div v-if="showPositionForm" class="px-6 py-5 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100">
           <form @submit.prevent="handleCreatePosition" class="space-y-3">
             <div>
               <label for="pos_name" class="block text-sm font-medium text-gray-700">
@@ -179,15 +189,20 @@
           <div
             v-for="pos in positions"
             :key="pos.id"
-            class="px-6 py-4 hover:bg-gray-50 transition-colors"
+            class="px-6 py-4 hover:bg-gradient-to-r hover:from-purple-50 hover:to-transparent transition-all group"
           >
             <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <h4 class="text-sm font-medium text-gray-900">{{ pos.name }}</h4>
-                <p v-if="pos.department_name" class="mt-1 text-xs text-gray-500">
-                  <Icon name="ri:building-line" class="inline mr-1" />
-                  {{ pos.department_name }}
-                </p>
+              <div class="flex items-start flex-1">
+                <div class="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center mr-3 group-hover:bg-purple-200 transition-colors">
+                  <Icon name="ri:briefcase-line" class="text-purple-600" />
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-semibold text-gray-900">{{ pos.name }}</h4>
+                  <p v-if="pos.department_name" class="mt-1 inline-flex items-center text-xs text-gray-600">
+                    <Icon name="ri:building-line" class="mr-1" />
+                    {{ pos.department_name }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
