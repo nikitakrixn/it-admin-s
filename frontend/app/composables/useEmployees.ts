@@ -145,6 +145,18 @@ export const useEmployees = () => {
     })
   }
 
+  const deleteDepartment = async (id: number) => {
+    return await $api(`/employees/departments/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  const deletePosition = async (id: number) => {
+    return await $api(`/employees/positions/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
   return {
     fetchEmployees,
     fetchEmployee,
@@ -155,6 +167,8 @@ export const useEmployees = () => {
     fetchDepartments,
     fetchPositions,
     createDepartment,
-    createPosition
+    createPosition,
+    deleteDepartment,
+    deletePosition
   }
 }

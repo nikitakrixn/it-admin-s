@@ -547,6 +547,34 @@ impl EmployeesApi {
         }
     }
 
+    /// Delete department
+    #[oai(path = "/departments/:id", method = "delete")]
+    async fn delete_department(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
+        let mut conn = match self.db_pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get database connection: {}", e),
+                }))
+            }
+        };
+
+        let result = diesel::delete(departments::table.find(id)).execute(&mut conn);
+
+        match result {
+            Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
+                error: "not_found".to_string(),
+                message: format!("Department with id {} not found", id),
+            })),
+            Ok(_) => EmployeeDeleteResponse::NoContent,
+            Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
+                error: "database_error".to_string(),
+                message: format!("Failed to delete department: {}", e),
+            })),
+        }
+    }
+
     /// Create new position
     #[oai(path = "/positions", method = "post")]
     async fn create_position(&self, Json(new_pos): Json<NewPosition>) -> PositionsListResponse {
@@ -571,6 +599,34 @@ impl EmployeesApi {
             Err(e) => PositionsListResponse::InternalError(Json(ErrorResponse {
                 error: "database_error".to_string(),
                 message: format!("Failed to create position: {}", e),
+            })),
+        }
+    }
+
+    /// Delete position
+    #[oai(path = "/positions/:id", method = "delete")]
+    async fn delete_position(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
+        let mut conn = match self.db_pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get database connection: {}", e),
+                }))
+            }
+        };
+
+        let result = diesel::delete(positions::table.find(id)).execute(&mut conn);
+
+        match result {
+            Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
+                error: "not_found".to_string(),
+                message: format!("Position with id {} not found", id),
+            })),
+            Ok(_) => EmployeeDeleteResponse::NoContent,
+            Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
+                error: "database_error".to_string(),
+                message: format!("Failed to delete position: {}", e),
             })),
         }
     }

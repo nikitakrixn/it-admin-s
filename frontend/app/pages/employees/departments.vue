@@ -106,6 +106,13 @@
                   </div>
                 </div>
               </div>
+              <button
+                @click="openDeleteDepartmentModal(dept)"
+                class="opacity-0 group-hover:opacity-100 inline-flex items-center p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all"
+                title="Удалить отдел"
+              >
+                <Icon name="ri:delete-bin-line" class="text-lg" />
+              </button>
             </div>
           </div>
         </div>
@@ -204,11 +211,48 @@
                   </p>
                 </div>
               </div>
+              <button
+                @click="openDeletePositionModal(pos)"
+                class="opacity-0 group-hover:opacity-100 inline-flex items-center p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all"
+                title="Удалить должность"
+              >
+                <Icon name="ri:delete-bin-line" class="text-lg" />
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Delete Department Modal -->
+    <ConfirmModal
+      :show="showDeleteDeptModal"
+      :loading="deletingDept"
+      title="Удалить отдел?"
+      :message="deptToDelete ? `Вы уверены, что хотите удалить отдел ${deptToDelete.name}? Это действие нельзя будет отменить.` : ''"
+      confirm-text="Да, удалить"
+      cancel-text="Отмена"
+      loading-text="Удаление..."
+      variant="danger"
+      icon="ri:delete-bin-line"
+      @confirm="confirmDeleteDept"
+      @cancel="closeDeleteDeptModal"
+    />
+
+    <!-- Delete Position Modal -->
+    <ConfirmModal
+      :show="showDeletePosModal"
+      :loading="deletingPos"
+      title="Удалить должность?"
+      :message="posToDelete ? `Вы уверены, что хотите удалить должность ${posToDelete.name}? Это действие нельзя будет отменить.` : ''"
+      confirm-text="Да, удалить"
+      cancel-text="Отмена"
+      loading-text="Удаление..."
+      variant="danger"
+      icon="ri:delete-bin-line"
+      @confirm="confirmDeletePos"
+      @cancel="closeDeletePosModal"
+    />
   </div>
 </template>
 
@@ -221,7 +265,7 @@ useHead({
   title: 'Отделы и должности'
 })
 
-const { fetchDepartments, fetchPositions, createDepartment, createPosition } = useEmployees()
+const { fetchDepartments, fetchPositions, createDepartment, createPosition, deleteDepartment, deletePosition } = useEmployees()
 
 const { data: departmentsData, refresh: refreshDepartments } = await useAsyncData('departments', () => fetchDepartments())
 const { data: positionsData, refresh: refreshPositions } = await useAsyncData('positions', () => fetchPositions())
@@ -282,6 +326,74 @@ const handleCreatePosition = async () => {
     alert('Ошибка при создании должности')
   } finally {
     loadingPos.value = false
+  }
+}
+
+// Delete Department
+const showDeleteDeptModal = ref(false)
+const deptToDelete = ref<any>(null)
+const deletingDept = ref(false)
+
+const openDeleteDepartmentModal = (dept: any) => {
+  deptToDelete.value = dept
+  showDeleteDeptModal.value = true
+}
+
+const closeDeleteDeptModal = () => {
+  if (!deletingDept.value) {
+    showDeleteDeptModal.value = false
+    deptToDelete.value = null
+  }
+}
+
+const confirmDeleteDept = async () => {
+  if (!deptToDelete.value) return
+  
+  deletingDept.value = true
+  try {
+    await deleteDepartment(deptToDelete.value.id)
+    await refreshDepartments()
+    await refreshNuxtData('departments')
+    showDeleteDeptModal.value = false
+    deptToDelete.value = null
+  } catch (err) {
+    alert('Ошибка при удалении отдела')
+  } finally {
+    deletingDept.value = false
+  }
+}
+
+// Delete Position
+const showDeletePosModal = ref(false)
+const posToDelete = ref<any>(null)
+const deletingPos = ref(false)
+
+const openDeletePositionModal = (pos: any) => {
+  posToDelete.value = pos
+  showDeletePosModal.value = true
+}
+
+const closeDeletePosModal = () => {
+  if (!deletingPos.value) {
+    showDeletePosModal.value = false
+    posToDelete.value = null
+  }
+}
+
+const confirmDeletePos = async () => {
+  if (!posToDelete.value) return
+  
+  deletingPos.value = true
+  try {
+    await deletePosition(posToDelete.value.id)
+    await refreshPositions()
+    await refreshNuxtData('positions')
+    showDeletePosModal.value = false
+    posToDelete.value = null
+  } catch (err) {
+    alert('Ошибка при удалении должности')
+  } finally {
+    deletingPos.value = false
   }
 }
 </script>
