@@ -102,7 +102,7 @@ pub struct UpdateEmployee {
     pub notes: Option<String>,
 }
 
-#[derive(Deserialize, poem_openapi::Object)]
+#[derive(Serialize, Deserialize, poem_openapi::Object)]
 pub struct UpdateEmployeeRequest {
     pub first_name: Option<String>,
     pub last_name: Option<String>,

@@ -9,6 +9,7 @@ use crate::models::employee::{
 };
 use crate::models::schema::{departments, employees, positions};
 use crate::routes::api::ApiTags;
+use crate::services::activity_log_service::ActivityLogService;
 
 // ============================================================================
 // Request/Response Types
@@ -120,11 +121,13 @@ pub enum PositionsListResponse {
 
 pub struct EmployeesApi {
     db_pool: Pool,
+    activity_log: ActivityLogService,
 }
 
 impl EmployeesApi {
     pub fn new(db_pool: Pool) -> Self {
-        Self { db_pool }
+        let activity_log = ActivityLogService::new(db_pool.clone());
+        Self { db_pool, activity_log }
     }
 
     fn employee_to_response(
@@ -324,6 +327,21 @@ impl EmployeesApi {
 
         match result {
             Ok(employee) => {
+                // Log activity
+                let details = serde_json::json!({
+                    "employee_name": employee.full_name(),
+                    "email": employee.email,
+                    "department_id": employee.department_id,
+                    "position_id": employee.position_id,
+                });
+                self.activity_log.log_with_details_async(
+                    None, // TODO: Get user_id from auth context
+                    "created",
+                    "employee",
+                    employee.id,
+                    details,
+                );
+
                 // Get position and department names
                 let (pos_name, dept_name) = if employee.position_id.is_some() || employee.department_id.is_some() {
                     let pos = employee.position_id.and_then(|pid| {
@@ -355,6 +373,9 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
+        // Serialize request for logging before it's moved
+        let req_json = serde_json::to_value(&req).ok();
+        
         let update_data = match req.to_update_employee() {
             Ok(data) => data,
             Err(e) => {
@@ -380,6 +401,21 @@ impl EmployeesApi {
 
         match result {
             Ok(employee) => {
+                // Log activity
+                if let Some(changes) = req_json {
+                    let details = serde_json::json!({
+                        "employee_name": employee.full_name(),
+                        "changes": changes,
+                    });
+                    self.activity_log.log_with_details_async(
+                        None,
+                        "updated",
+                        "employee",
+                        employee.id,
+                        details,
+                    );
+                }
+
                 let (pos_name, dept_name) = if employee.position_id.is_some() || employee.department_id.is_some() {
                     let pos = employee.position_id.and_then(|pid| {
                         positions::table.find(pid).select(positions::name).first::<String>(&mut conn).ok()
@@ -422,6 +458,13 @@ impl EmployeesApi {
             }
         };
 
+        // Get employee name before deletion
+        let employee_name = employees::table
+            .find(id)
+            .select((employees::first_name, employees::last_name))
+            .first::<(String, String)>(&mut conn)
+            .ok();
+
         let result = diesel::delete(employees::table.find(id)).execute(&mut conn);
 
         match result {
@@ -429,7 +472,22 @@ impl EmployeesApi {
                 error: "not_found".to_string(),
                 message: format!("Employee with id {} not found", id),
             })),
-            Ok(_) => EmployeeDeleteResponse::NoContent,
+            Ok(_) => {
+                // Log activity
+                if let Some((first_name, last_name)) = employee_name {
+                    let details = serde_json::json!({
+                        "employee_name": format!("{} {}", first_name, last_name),
+                    });
+                    self.activity_log.log_with_details_async(
+                        None,
+                        "deleted",
+                        "employee",
+                        id,
+                        details,
+                    );
+                }
+                EmployeeDeleteResponse::NoContent
+            }
             Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
                 error: "database_error".to_string(),
                 message: format!("Failed to delete employee: {}", e),
@@ -462,7 +520,11 @@ impl EmployeesApi {
 
         for id in req.ids {
             match diesel::delete(employees::table.find(id)).execute(&mut conn) {
-                Ok(count) if count > 0 => deleted_count += 1,
+                Ok(count) if count > 0 => {
+                    deleted_count += 1;
+                    // Log activity
+                    self.activity_log.log_async(None, "deleted", "employee", id);
+                }
                 Ok(_) => failed_ids.push(id),
                 Err(_) => failed_ids.push(id),
             }
@@ -534,9 +596,21 @@ impl EmployeesApi {
 
         match diesel::insert_into(departments::table)
             .values(&new_dept)
-            .execute(&mut conn)
+            .get_result::<crate::models::employee::Department>(&mut conn)
         {
-            Ok(_) => {
+            Ok(dept) => {
+                // Log activity
+                let details = serde_json::json!({
+                    "department_name": dept.name,
+                    "description": dept.description,
+                });
+                self.activity_log.log_with_details_async(
+                    None,
+                    "created",
+                    "department",
+                    dept.id,
+                    details,
+                );
                 // Return updated list
                 self.list_departments().await
             }
@@ -560,6 +634,13 @@ impl EmployeesApi {
             }
         };
 
+        // Get department name before deletion
+        let dept_name = departments::table
+            .find(id)
+            .select(departments::name)
+            .first::<String>(&mut conn)
+            .ok();
+
         let result = diesel::delete(departments::table.find(id)).execute(&mut conn);
 
         match result {
@@ -567,7 +648,14 @@ impl EmployeesApi {
                 error: "not_found".to_string(),
                 message: format!("Department with id {} not found", id),
             })),
-            Ok(_) => EmployeeDeleteResponse::NoContent,
+            Ok(_) => {
+                // Log activity
+                if let Some(name) = dept_name {
+                    let details = serde_json::json!({ "department_name": name });
+                    self.activity_log.log_with_details_async(None, "deleted", "department", id, details);
+                }
+                EmployeeDeleteResponse::NoContent
+            }
             Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
                 error: "database_error".to_string(),
                 message: format!("Failed to delete department: {}", e),
@@ -590,9 +678,15 @@ impl EmployeesApi {
 
         match diesel::insert_into(positions::table)
             .values(&new_pos)
-            .execute(&mut conn)
+            .get_result::<Position>(&mut conn)
         {
-            Ok(_) => {
+            Ok(pos) => {
+                // Log activity
+                let details = serde_json::json!({
+                    "position_name": pos.name,
+                    "department_id": pos.department_id,
+                });
+                self.activity_log.log_with_details_async(None, "created", "position", pos.id, details);
                 // Return updated list
                 self.list_positions().await
             }
@@ -616,6 +710,13 @@ impl EmployeesApi {
             }
         };
 
+        // Get position name before deletion
+        let pos_name = positions::table
+            .find(id)
+            .select(positions::name)
+            .first::<String>(&mut conn)
+            .ok();
+
         let result = diesel::delete(positions::table.find(id)).execute(&mut conn);
 
         match result {
@@ -623,7 +724,14 @@ impl EmployeesApi {
                 error: "not_found".to_string(),
                 message: format!("Position with id {} not found", id),
             })),
-            Ok(_) => EmployeeDeleteResponse::NoContent,
+            Ok(_) => {
+                // Log activity
+                if let Some(name) = pos_name {
+                    let details = serde_json::json!({ "position_name": name });
+                    self.activity_log.log_with_details_async(None, "deleted", "position", id, details);
+                }
+                EmployeeDeleteResponse::NoContent
+            }
             Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
                 error: "database_error".to_string(),
                 message: format!("Failed to delete position: {}", e),
