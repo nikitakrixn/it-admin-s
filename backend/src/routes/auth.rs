@@ -1,4 +1,4 @@
-use poem_openapi::{payload::Json, ApiResponse, Object, OpenApi};
+use poem_openapi::{param::Header, payload::Json, ApiResponse, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -186,12 +186,48 @@ impl AuthApi {
     /// Returns information about the currently authenticated user.
     /// Requires a valid JWT token in the Authorization header.
     #[oai(path = "/me", method = "get")]
-    async fn me(&self) -> MeResponse {
-        // TODO: Implement after adding auth middleware
-        // For now, return unauthorized
-        MeResponse::Unauthorized(Json(ErrorResponse {
-            error: "not_implemented".to_string(),
-            message: "Auth middleware not yet implemented".to_string(),
-        }))
+    async fn me(&self, authorization: Header<Option<String>>) -> MeResponse {
+        // Проверить наличие токена
+        let token = match authorization.0 {
+            Some(ref auth_header) if auth_header.starts_with("Bearer ") => {
+                &auth_header[7..]
+            }
+            _ => {
+                return MeResponse::Unauthorized(Json(ErrorResponse {
+                    error: "unauthorized".to_string(),
+                    message: "Missing or invalid authorization header".to_string(),
+                }))
+            }
+        };
+
+        // Валидировать токен
+        let claims = match self.auth_service.verify_token(token) {
+            Ok(claims) => claims,
+            Err(_) => {
+                return MeResponse::Unauthorized(Json(ErrorResponse {
+                    error: "unauthorized".to_string(),
+                    message: "Invalid or expired token".to_string(),
+                }))
+            }
+        };
+
+        // Получить пользователя из БД
+        let user_id = match uuid::Uuid::parse_str(&claims.sub) {
+            Ok(id) => id,
+            Err(_) => {
+                return MeResponse::Unauthorized(Json(ErrorResponse {
+                    error: "invalid_token".to_string(),
+                    message: "Invalid user ID in token".to_string(),
+                }))
+            }
+        };
+
+        match self.auth_service.get_user_by_id(user_id) {
+            Ok(user) => MeResponse::Ok(Json(user.into())),
+            Err(_) => MeResponse::Unauthorized(Json(ErrorResponse {
+                error: "user_not_found".to_string(),
+                message: "User not found".to_string(),
+            })),
+        }
     }
 }
