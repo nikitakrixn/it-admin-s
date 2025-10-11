@@ -145,6 +145,8 @@
               >
                 <option value="active">Активен</option>
                 <option value="inactive">Неактивен</option>
+                <option value="vacation">В отпуске</option>
+                <option value="sick_leave">На больничном</option>
                 <option value="terminated">Уволен</option>
               </select>
             </div>

@@ -65,6 +65,8 @@
               <option value="">Все статусы</option>
               <option value="active">Активные</option>
               <option value="inactive">Неактивные</option>
+              <option value="vacation">В отпуске</option>
+              <option value="sick_leave">На больничном</option>
               <option value="terminated">Уволенные</option>
             </select>
           </div>
@@ -229,6 +231,8 @@
                 :class="{
                   'bg-green-100 text-green-800': employee.status === 'active',
                   'bg-gray-100 text-gray-800': employee.status === 'inactive',
+                  'bg-blue-100 text-blue-800': employee.status === 'vacation',
+                  'bg-yellow-100 text-yellow-800': employee.status === 'sick_leave',
                   'bg-red-100 text-red-800': employee.status === 'terminated'
                 }"
                 class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
@@ -415,6 +419,8 @@ const statusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: 'Активен',
     inactive: 'Неактивен',
+    vacation: 'В отпуске',
+    sick_leave: 'На больничном',
     terminated: 'Уволен'
   }
   return labels[status] || status

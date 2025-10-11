@@ -46,11 +46,15 @@
                   <span :class="{
                     'bg-green-50 text-green-700 border-green-200': employee.status === 'active',
                     'bg-gray-50 text-gray-700 border-gray-200': employee.status === 'inactive',
+                    'bg-blue-50 text-blue-700 border-blue-200': employee.status === 'vacation',
+                    'bg-yellow-50 text-yellow-700 border-yellow-200': employee.status === 'sick_leave',
                     'bg-red-50 text-red-700 border-red-200': employee.status === 'terminated'
                   }" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border">
                     <span :class="{
                       'bg-green-500': employee.status === 'active',
                       'bg-gray-500': employee.status === 'inactive',
+                      'bg-blue-500': employee.status === 'vacation',
+                      'bg-yellow-500': employee.status === 'sick_leave',
                       'bg-red-500': employee.status === 'terminated'
                     }" class="h-1.5 w-1.5 rounded-full mr-1.5"></span>
                     {{ statusLabel(employee.status) }}
@@ -179,11 +183,15 @@
                   <span :class="{
                     'bg-green-100 text-green-800 ring-1 ring-green-600/20': employee.status === 'active',
                     'bg-gray-100 text-gray-800 ring-1 ring-gray-600/20': employee.status === 'inactive',
+                    'bg-blue-100 text-blue-800 ring-1 ring-blue-600/20': employee.status === 'vacation',
+                    'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-600/20': employee.status === 'sick_leave',
                     'bg-red-100 text-red-800 ring-1 ring-red-600/20': employee.status === 'terminated'
                   }" class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full">
                     <span :class="{
                       'bg-green-500': employee.status === 'active',
                       'bg-gray-500': employee.status === 'inactive',
+                      'bg-blue-500': employee.status === 'vacation',
+                      'bg-yellow-500': employee.status === 'sick_leave',
                       'bg-red-500': employee.status === 'terminated'
                     }" class="h-1.5 w-1.5 rounded-full mr-2"></span>
                     {{ statusLabel(employee.status) }}
@@ -394,7 +402,9 @@ const statusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: 'Активен',
     inactive: 'Неактивен',
-    terminated: 'Уволен'
+    terminated: 'Уволен',
+    sick_leave: 'На больничном',
+    vacation: 'В отпуске'
   }
   return labels[status] || status
 }
