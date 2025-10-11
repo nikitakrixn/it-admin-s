@@ -4,8 +4,8 @@ use serde::Serialize;
 
 use crate::config::database::Pool;
 use crate::models::employee::{
-    Department, DepartmentResponse, Employee, EmployeeResponse, NewEmployeeRequest,
-    Position, PositionResponse, UpdateEmployeeRequest,
+    Department, DepartmentResponse, Employee, EmployeeResponse, NewDepartment, NewEmployeeRequest,
+    NewPosition, Position, PositionResponse, UpdateEmployeeRequest,
 };
 use crate::models::schema::{departments, employees, positions};
 use crate::routes::api::ApiTags;
@@ -457,6 +457,62 @@ impl EmployeesApi {
             Err(e) => DepartmentsListResponse::InternalError(Json(ErrorResponse {
                 error: "database_error".to_string(),
                 message: format!("Failed to load departments: {}", e),
+            })),
+        }
+    }
+
+    /// Create new department
+    #[oai(path = "/departments", method = "post")]
+    async fn create_department(&self, Json(new_dept): Json<NewDepartment>) -> DepartmentsListResponse {
+        let mut conn = match self.db_pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                return DepartmentsListResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get database connection: {}", e),
+                }))
+            }
+        };
+
+        match diesel::insert_into(departments::table)
+            .values(&new_dept)
+            .execute(&mut conn)
+        {
+            Ok(_) => {
+                // Return updated list
+                self.list_departments().await
+            }
+            Err(e) => DepartmentsListResponse::InternalError(Json(ErrorResponse {
+                error: "database_error".to_string(),
+                message: format!("Failed to create department: {}", e),
+            })),
+        }
+    }
+
+    /// Create new position
+    #[oai(path = "/positions", method = "post")]
+    async fn create_position(&self, Json(new_pos): Json<NewPosition>) -> PositionsListResponse {
+        let mut conn = match self.db_pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                return PositionsListResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get database connection: {}", e),
+                }))
+            }
+        };
+
+        match diesel::insert_into(positions::table)
+            .values(&new_pos)
+            .execute(&mut conn)
+        {
+            Ok(_) => {
+                // Return updated list
+                self.list_positions().await
+            }
+            Err(e) => PositionsListResponse::InternalError(Json(ErrorResponse {
+                error: "database_error".to_string(),
+                message: format!("Failed to create position: {}", e),
             })),
         }
     }

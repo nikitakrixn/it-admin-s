@@ -1,18 +1,40 @@
 <template>
   <div>
     <!-- Header -->
-    <div class="mb-6 flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">Сотрудники</h1>
-        <p class="mt-1 text-sm text-gray-500">Управление сотрудниками организации</p>
+    <div class="relative mb-10 pb-5">
+      <div class="relative z-10 pt-4 pb-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center">
+              <div class="h-16 w-16 flex-shrink-0 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mr-5 shadow-lg">
+                <Icon name="ri:team-line" class="text-white text-3xl" />
+              </div>
+              <div>
+                <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">Сотрудники</h1>
+                <p class="mt-2 text-sm text-gray-600 max-w-4xl">
+                  Управление сотрудниками организации, их учетными записями и оборудованием
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="mt-5 sm:mt-0 flex flex-shrink-0 space-x-2">
+            <NuxtLink
+              to="/employees/departments"
+              class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all"
+            >
+              <Icon name="ri:building-line" class="mr-2 h-5 w-5 text-gray-500" />
+              Отделы
+            </NuxtLink>
+            <NuxtLink
+              to="/employees/create"
+              class="inline-flex items-center rounded-lg border border-transparent bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all"
+            >
+              <Icon name="ri:add-line" class="mr-2 h-5 w-5" />
+              Добавить сотрудника
+            </NuxtLink>
+          </div>
+        </div>
       </div>
-      <NuxtLink
-        to="/employees/create"
-        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-      >
-        <Icon name="ri:add-line" class="mr-2" />
-        Добавить сотрудника
-      </NuxtLink>
     </div>
 
     <!-- Filters -->

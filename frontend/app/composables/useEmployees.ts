@@ -119,6 +119,20 @@ export const useEmployees = () => {
     return await $api<Position[]>('/employees/positions')
   }
 
+  const createDepartment = async (data: { name: string; description?: string }) => {
+    return await $api<Department[]>('/employees/departments', {
+      method: 'POST',
+      body: data
+    })
+  }
+
+  const createPosition = async (data: { name: string; department_id?: number }) => {
+    return await $api<Position[]>('/employees/positions', {
+      method: 'POST',
+      body: data
+    })
+  }
+
   return {
     fetchEmployees,
     fetchEmployee,
@@ -126,6 +140,8 @@ export const useEmployees = () => {
     updateEmployee,
     deleteEmployee,
     fetchDepartments,
-    fetchPositions
+    fetchPositions,
+    createDepartment,
+    createPosition
   }
 }
