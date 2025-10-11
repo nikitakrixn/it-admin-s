@@ -21,7 +21,7 @@
     </div>
 
     <div v-else-if="employee" class="space-y-6">
-      <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
         <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-8">
           <div class="flex items-center">
             <div class="h-20 w-20 rounded-full bg-white flex items-center justify-center text-primary-600 font-bold text-2xl shadow-lg">
@@ -37,14 +37,14 @@
         <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
           <NuxtLink
             :to="`/employees/${employee.id}/edit`"
-            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all"
           >
             <Icon name="ri:edit-line" class="mr-2" />
             Редактировать
           </NuxtLink>
           <button
-            @click="confirmDelete"
-            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+            @click="openDeleteModal"
+            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-all"
           >
             <Icon name="ri:delete-bin-line" class="mr-2" />
             Удалить
@@ -53,7 +53,6 @@
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Personal Information -->
         <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
           <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
             <h3 class="text-lg font-semibold text-gray-900 flex items-center">
@@ -105,7 +104,6 @@
           </div>
         </div>
 
-        <!-- Work Information -->
         <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
           <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-white border-b border-gray-200">
             <h3 class="text-lg font-semibold text-gray-900 flex items-center">
@@ -166,6 +164,20 @@
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="showDeleteModal"
+      :loading="deleting"
+      title="Удалить сотрудника?"
+      :message="employee ? `Вы уверены, что хотите удалить сотрудника ${employee.full_name}? Это действие нельзя будет отменить.` : ''"
+      confirm-text="Да, удалить"
+      cancel-text="Отмена"
+      loading-text="Удаление..."
+      variant="danger"
+      icon="ri:delete-bin-line"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteModal"
+    />
   </div>
 </template>
 
@@ -197,20 +209,33 @@ const statusLabel = (status: string) => {
   return labels[status] || status
 }
 
+const showDeleteModal = ref(false)
+const deleting = ref(false)
+
+const openDeleteModal = () => {
+  showDeleteModal.value = true
+}
+
+const closeDeleteModal = () => {
+  if (!deleting.value) {
+    showDeleteModal.value = false
+  }
+}
+
 const confirmDelete = async () => {
   if (!employee.value) return
   
-  if (confirm(`Вы уверены, что хотите удалить сотрудника ${employee.value.full_name}?`)) {
-    try {
-      await deleteEmployee(employee.value.id)
-      
-      // Инвалидируем кеш списка сотрудников
-      await refreshNuxtData('employees')
-      
-      await navigateTo('/employees')
-    } catch (err) {
-      alert('Ошибка при удалении сотрудника')
-    }
+  deleting.value = true
+  try {
+    await deleteEmployee(employee.value.id)
+    
+    await refreshNuxtData('employees')
+    
+    await navigateTo('/employees')
+  } catch (err) {
+    alert('Ошибка при удалении сотрудника')
+    deleting.value = false
+    showDeleteModal.value = false
   }
 }
 </script>

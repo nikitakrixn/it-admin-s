@@ -18,6 +18,14 @@
             </div>
           </div>
           <div class="mt-5 sm:mt-0 flex flex-shrink-0 space-x-2">
+            <button
+              v-if="selectedIds.length > 0"
+              @click="openBulkDeleteModal"
+              class="inline-flex items-center rounded-lg border border-red-300 bg-white px-4 py-2.5 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all"
+            >
+              <Icon name="ri:delete-bin-line" class="mr-2 h-5 w-5" />
+              Удалить ({{ selectedIds.length }})
+            </button>
             <NuxtLink
               to="/employees/departments"
               class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all"
@@ -107,6 +115,14 @@
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
+            <th class="px-6 py-3 text-left">
+              <input
+                type="checkbox"
+                v-model="selectAll"
+                @change="toggleSelectAll"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+              />
+            </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               ФИО
             </th>
@@ -132,7 +148,7 @@
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <tr v-if="!employees.length">
-            <td colspan="7" class="px-6 py-16 text-center">
+            <td colspan="8" class="px-6 py-16 text-center">
               <div class="flex flex-col items-center justify-center">
                 <div class="h-24 w-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-4">
                   <Icon name="ri:user-search-line" class="text-5xl text-gray-400" />
@@ -164,6 +180,14 @@
             </td>
           </tr>
           <tr v-for="employee in employees" :key="employee.id" class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <input
+                type="checkbox"
+                :checked="selectedIds.includes(employee.id)"
+                @change="toggleSelect(employee.id)"
+                class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+              />
+            </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="flex items-center">
                 <div class="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-bold shadow-sm">
@@ -229,7 +253,7 @@
                   <Icon name="ri:edit-line" class="text-lg" />
                 </NuxtLink>
                 <button
-                  @click="confirmDelete(employee)"
+                  @click="openDeleteModal(employee)"
                   class="inline-flex items-center p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all"
                   title="Удалить"
                 >
@@ -297,6 +321,36 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <ConfirmModal
+      :show="showDeleteModal"
+      :loading="deleting"
+      title="Удалить сотрудника?"
+      :message="employeeToDelete ? `Вы уверены, что хотите удалить сотрудника ${employeeToDelete.full_name}? Это действие нельзя будет отменить.` : ''"
+      confirm-text="Да, удалить"
+      cancel-text="Отмена"
+      loading-text="Удаление..."
+      variant="danger"
+      icon="ri:delete-bin-line"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteModal"
+    />
+
+    <!-- Bulk Delete Confirmation Modal -->
+    <ConfirmModal
+      :show="showBulkDeleteModal"
+      :loading="bulkDeleting"
+      title="Массовое удаление сотрудников"
+      :message="`Вы уверены, что хотите удалить ${selectedIds.length} ${selectedIds.length === 1 ? 'сотрудника' : 'сотрудников'}? Это действие нельзя будет отменить.`"
+      confirm-text="Да, удалить всех"
+      cancel-text="Отмена"
+      loading-text="Удаление..."
+      variant="danger"
+      icon="ri:delete-bin-line"
+      @confirm="confirmBulkDelete"
+      @cancel="closeBulkDeleteModal"
+    />
   </div>
 </template>
 
@@ -309,7 +363,7 @@ useHead({
   title: 'Сотрудники'
 })
 
-const { fetchEmployees, fetchDepartments, deleteEmployee } = useEmployees()
+const { fetchEmployees, fetchDepartments, deleteEmployee, bulkDeleteEmployees } = useEmployees()
 
 const currentPage = ref(1)
 const perPage = ref(20)
@@ -317,6 +371,9 @@ const filters = ref({
   status: '',
   department_id: undefined as number | undefined
 })
+
+const selectedIds = ref<number[]>([])
+const selectAll = ref(false)
 
 const { data: departmentsData } = await useAsyncData('departments', () => fetchDepartments())
 const departments = computed(() => departmentsData.value || [])
@@ -369,14 +426,94 @@ const resetFilters = () => {
   loadEmployees()
 }
 
-const confirmDelete = async (employee: any) => {
-  if (confirm(`Вы уверены, что хотите удалить сотрудника ${employee.full_name}?`)) {
-    try {
-      await deleteEmployee(employee.id)
-      refresh()
-    } catch (err) {
-      alert('Ошибка при удалении сотрудника')
+const showDeleteModal = ref(false)
+const employeeToDelete = ref<any>(null)
+const deleting = ref(false)
+
+const showBulkDeleteModal = ref(false)
+const bulkDeleting = ref(false)
+
+const toggleSelectAll = () => {
+  if (selectAll.value) {
+    selectedIds.value = employees.value.map(e => e.id)
+  } else {
+    selectedIds.value = []
+  }
+}
+
+const toggleSelect = (id: number) => {
+  const index = selectedIds.value.indexOf(id)
+  if (index > -1) {
+    selectedIds.value.splice(index, 1)
+  } else {
+    selectedIds.value.push(id)
+  }
+  selectAll.value = selectedIds.value.length === employees.value.length
+}
+
+watch(employees, () => {
+  selectedIds.value = selectedIds.value.filter(id => 
+    employees.value.some(e => e.id === id)
+  )
+  selectAll.value = selectedIds.value.length > 0 && selectedIds.value.length === employees.value.length
+})
+
+const openDeleteModal = (employee: any) => {
+  employeeToDelete.value = employee
+  showDeleteModal.value = true
+}
+
+const closeDeleteModal = () => {
+  if (!deleting.value) {
+    showDeleteModal.value = false
+    employeeToDelete.value = null
+  }
+}
+
+const confirmDelete = async () => {
+  if (!employeeToDelete.value) return
+  
+  deleting.value = true
+  try {
+    await deleteEmployee(employeeToDelete.value.id)
+    await refresh()
+    showDeleteModal.value = false
+    employeeToDelete.value = null
+  } catch (err) {
+    alert('Ошибка при удалении сотрудника')
+  } finally {
+    deleting.value = false
+  }
+}
+
+const openBulkDeleteModal = () => {
+  if (selectedIds.value.length === 0) return
+  showBulkDeleteModal.value = true
+}
+
+const closeBulkDeleteModal = () => {
+  if (!bulkDeleting.value) {
+    showBulkDeleteModal.value = false
+  }
+}
+
+const confirmBulkDelete = async () => {
+  if (selectedIds.value.length === 0) return
+  
+  bulkDeleting.value = true
+  try {
+    const result = await bulkDeleteEmployees(selectedIds.value)
+    if (result.failed_ids.length > 0) {
+      alert(`Удалено: ${result.deleted_count}. Не удалось удалить: ${result.failed_ids.length}`)
     }
+    selectedIds.value = []
+    selectAll.value = false
+    await refresh()
+    showBulkDeleteModal.value = false
+  } catch (err) {
+    alert('Ошибка при массовом удалении сотрудников')
+  } finally {
+    bulkDeleting.value = false
   }
 }
 </script>

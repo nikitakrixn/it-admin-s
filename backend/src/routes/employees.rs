@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 use poem_openapi::{param::Path, param::Query, payload::Json, ApiResponse, Object, OpenApi};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::database::Pool;
 use crate::models::employee::{
@@ -11,7 +11,7 @@ use crate::models::schema::{departments, employees, positions};
 use crate::routes::api::ApiTags;
 
 // ============================================================================
-// Response Types
+// Request/Response Types
 // ============================================================================
 
 #[derive(Serialize, Object)]
@@ -20,6 +20,17 @@ pub struct EmployeeListResponse {
     pub total: i64,
     pub page: i64,
     pub per_page: i64,
+}
+
+#[derive(Deserialize, Object)]
+pub struct BulkDeleteRequest {
+    pub ids: Vec<i32>,
+}
+
+#[derive(Serialize, Object)]
+pub struct BulkDeleteResponse {
+    pub deleted_count: usize,
+    pub failed_ids: Vec<i32>,
 }
 
 #[derive(Serialize, Object)]
@@ -73,6 +84,16 @@ pub enum EmployeeDeleteResponse {
     NoContent,
     #[oai(status = 404)]
     NotFound(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
+}
+
+#[derive(ApiResponse)]
+pub enum BulkDeleteEmployeesResponse {
+    #[oai(status = 200)]
+    Ok(Json<BulkDeleteResponse>),
+    #[oai(status = 400)]
+    BadRequest(Json<ErrorResponse>),
     #[oai(status = 500)]
     InternalError(Json<ErrorResponse>),
 }
@@ -414,6 +435,43 @@ impl EmployeesApi {
                 message: format!("Failed to delete employee: {}", e),
             })),
         }
+    }
+
+    /// Bulk delete employees
+    #[oai(path = "/bulk-delete", method = "post")]
+    async fn bulk_delete_employees(&self, Json(req): Json<BulkDeleteRequest>) -> BulkDeleteEmployeesResponse {
+        if req.ids.is_empty() {
+            return BulkDeleteEmployeesResponse::BadRequest(Json(ErrorResponse {
+                error: "validation_error".to_string(),
+                message: "No employee IDs provided".to_string(),
+            }));
+        }
+
+        let mut conn = match self.db_pool.get() {
+            Ok(conn) => conn,
+            Err(e) => {
+                return BulkDeleteEmployeesResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get database connection: {}", e),
+                }))
+            }
+        };
+
+        let mut deleted_count = 0;
+        let mut failed_ids = Vec::new();
+
+        for id in req.ids {
+            match diesel::delete(employees::table.find(id)).execute(&mut conn) {
+                Ok(count) if count > 0 => deleted_count += 1,
+                Ok(_) => failed_ids.push(id),
+                Err(_) => failed_ids.push(id),
+            }
+        }
+
+        BulkDeleteEmployeesResponse::Ok(Json(BulkDeleteResponse {
+            deleted_count,
+            failed_ids,
+        }))
     }
 
     /// Get all departments

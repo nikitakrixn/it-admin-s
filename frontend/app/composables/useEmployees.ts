@@ -73,6 +73,11 @@ export interface UpdateEmployeeData {
   notes?: string
 }
 
+export interface BulkDeleteResponse {
+  deleted_count: number
+  failed_ids: number[]
+}
+
 export const useEmployees = () => {
   const { $api } = useNuxtApp()
 
@@ -111,6 +116,13 @@ export const useEmployees = () => {
     })
   }
 
+  const bulkDeleteEmployees = async (ids: number[]) => {
+    return await $api<BulkDeleteResponse>('/employees/bulk-delete', {
+      method: 'POST',
+      body: { ids }
+    })
+  }
+
   const fetchDepartments = async () => {
     return await $api<Department[]>('/employees/departments')
   }
@@ -139,6 +151,7 @@ export const useEmployees = () => {
     createEmployee,
     updateEmployee,
     deleteEmployee,
+    bulkDeleteEmployees,
     fetchDepartments,
     fetchPositions,
     createDepartment,
