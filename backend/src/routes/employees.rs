@@ -335,7 +335,7 @@ impl EmployeesApi {
                     "position_id": employee.position_id,
                 });
                 self.activity_log.log_with_details_async(
-                    None, // TODO: Get user_id from auth context
+                    None, // TODO: Extract user_id from JWT in middleware
                     "created",
                     "employee",
                     employee.id,
