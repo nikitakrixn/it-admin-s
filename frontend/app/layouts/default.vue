@@ -71,13 +71,13 @@
                 <div class="flex w-full items-center justify-between">
                   <div class="flex min-w-0 items-center gap-x-3">
                     <div class="h-9 w-9 rounded-full bg-primary-600 flex items-center justify-center text-white shadow-inner">
-                      <span class="text-sm font-medium">А</span>
+                      <span class="text-sm font-medium">{{ user?.email?.charAt(0).toUpperCase() || 'U' }}</span>
                     </div>
                     <div class="min-w-0 flex-1">
-                      <div class="text-sm font-medium text-white truncate">Администратор</div>
-                      <NuxtLink to="/logout" class="text-xs text-primary-200 hover:text-white transition-colors">
+                      <div class="text-sm font-medium text-white truncate">{{ user?.email || 'Loading...' }}</div>
+                      <button @click="handleLogout" class="text-xs text-primary-200 hover:text-white transition-colors">
                         Выйти
-                      </NuxtLink>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -131,6 +131,11 @@
 
 <script setup lang="ts">
 const sidebarOpen = ref(false)
+const { user, logout } = useAuth()
+
+const handleLogout = () => {
+  logout()
+}
 </script>
 
 <style scoped>

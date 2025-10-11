@@ -40,7 +40,15 @@ async fn main() -> Result<(), std::io::Error> {
 
     // Run migrations
     tracing::info!("Running database migrations...");
-    // TODO: Run migrations here
+    {
+        use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+        const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+        
+        let mut conn = db_pool.get().expect("Failed to get DB connection for migrations");
+        conn.run_pending_migrations(MIGRATIONS)
+            .expect("Failed to run migrations");
+        tracing::info!("Database migrations completed successfully");
+    }
 
     // Create services
     let auth_service = services::auth_service::AuthService::new(
@@ -70,7 +78,12 @@ async fn main() -> Result<(), std::io::Error> {
         .nest("/docs", ui)
         .nest("/api-spec", spec)
         .at("/health", poem::endpoint::make_sync(|_| "OK"))
-        .with(Cors::new())
+        .with(Cors::new()
+            .allow_origin("http://localhost:3000")
+            .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
+            .allow_credentials(true)
+            .max_age(3600)
+        )
         .with(Tracing);
 
     // Start server
