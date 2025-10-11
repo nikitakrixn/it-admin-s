@@ -1,6 +1,5 @@
 use poem::{
     http::StatusCode,
-    web::headers::{authorization::Bearer, Authorization},
     Endpoint, Error, Middleware, Request, Result,
 };
 use std::sync::Arc;

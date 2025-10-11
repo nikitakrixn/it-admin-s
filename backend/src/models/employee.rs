@@ -29,7 +29,7 @@ pub struct Employee {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Insertable, Deserialize, poem_openapi::Object)]
+#[derive(Insertable, Deserialize)]
 #[diesel(table_name = employees)]
 pub struct NewEmployee {
     pub first_name: String,
@@ -45,7 +45,47 @@ pub struct NewEmployee {
     pub notes: Option<String>,
 }
 
-#[derive(AsChangeset, Deserialize, poem_openapi::Object)]
+#[derive(Deserialize, poem_openapi::Object)]
+pub struct NewEmployeeRequest {
+    pub first_name: String,
+    pub last_name: String,
+    pub middle_name: Option<String>,
+    pub position_id: Option<i32>,
+    pub department_id: Option<i32>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub ad_username: Option<String>,
+    pub hire_date: Option<String>,
+    pub status: String,
+    pub notes: Option<String>,
+}
+
+impl NewEmployeeRequest {
+    pub fn to_new_employee(self) -> Result<NewEmployee, String> {
+        let hire_date = if let Some(date_str) = self.hire_date {
+            Some(NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                .map_err(|e| format!("Invalid date format: {}", e))?)
+        } else {
+            None
+        };
+
+        Ok(NewEmployee {
+            first_name: self.first_name,
+            last_name: self.last_name,
+            middle_name: self.middle_name,
+            position_id: self.position_id,
+            department_id: self.department_id,
+            email: self.email,
+            phone: self.phone,
+            ad_username: self.ad_username,
+            hire_date,
+            status: self.status,
+            notes: self.notes,
+        })
+    }
+}
+
+#[derive(AsChangeset, Deserialize)]
 #[diesel(table_name = employees)]
 pub struct UpdateEmployee {
     pub first_name: Option<String>,
@@ -60,6 +100,55 @@ pub struct UpdateEmployee {
     pub termination_date: Option<NaiveDate>,
     pub status: Option<String>,
     pub notes: Option<String>,
+}
+
+#[derive(Deserialize, poem_openapi::Object)]
+pub struct UpdateEmployeeRequest {
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub middle_name: Option<String>,
+    pub position_id: Option<i32>,
+    pub department_id: Option<i32>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub ad_username: Option<String>,
+    pub hire_date: Option<String>,
+    pub termination_date: Option<String>,
+    pub status: Option<String>,
+    pub notes: Option<String>,
+}
+
+impl UpdateEmployeeRequest {
+    pub fn to_update_employee(self) -> Result<UpdateEmployee, String> {
+        let hire_date = if let Some(date_str) = self.hire_date {
+            Some(NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                .map_err(|e| format!("Invalid hire_date format: {}", e))?)
+        } else {
+            None
+        };
+
+        let termination_date = if let Some(date_str) = self.termination_date {
+            Some(NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                .map_err(|e| format!("Invalid termination_date format: {}", e))?)
+        } else {
+            None
+        };
+
+        Ok(UpdateEmployee {
+            first_name: self.first_name,
+            last_name: self.last_name,
+            middle_name: self.middle_name,
+            position_id: self.position_id,
+            department_id: self.department_id,
+            email: self.email,
+            phone: self.phone,
+            ad_username: self.ad_username,
+            hire_date,
+            termination_date,
+            status: self.status,
+            notes: self.notes,
+        })
+    }
 }
 
 // Response DTO with joined data

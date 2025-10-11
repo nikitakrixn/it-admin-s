@@ -1,11 +1,11 @@
 use diesel::prelude::*;
 use poem_openapi::{param::Path, param::Query, payload::Json, ApiResponse, Object, OpenApi};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::config::database::Pool;
 use crate::models::employee::{
-    Department, DepartmentResponse, Employee, EmployeeResponse, NewDepartment, NewEmployee,
-    Position, PositionResponse, UpdateEmployee,
+    Department, DepartmentResponse, Employee, EmployeeResponse, NewEmployeeRequest,
+    Position, PositionResponse, UpdateEmployeeRequest,
 };
 use crate::models::schema::{departments, employees, positions};
 use crate::routes::api::ApiTags;
@@ -158,7 +158,32 @@ impl EmployeesApi {
             }
         };
 
-        // Build query
+        // Build base query for counting
+        let mut count_query = employees::table.into_boxed();
+
+        if let Some(ref s) = status {
+            count_query = count_query.filter(employees::status.eq(s));
+        }
+
+        if let Some(dept_id) = department_id {
+            count_query = count_query.filter(employees::department_id.eq(dept_id));
+        }
+
+        // Get total count
+        let total = match count_query
+            .count()
+            .get_result::<i64>(&mut conn)
+        {
+            Ok(count) => count,
+            Err(e) => {
+                return EmployeesListResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to count employees: {}", e),
+                }))
+            }
+        };
+
+        // Build query for data retrieval
         let mut query = employees::table
             .left_join(positions::table)
             .left_join(departments::table)
@@ -171,20 +196,6 @@ impl EmployeesApi {
         if let Some(dept_id) = department_id {
             query = query.filter(employees::department_id.eq(dept_id));
         }
-
-        // Get total count
-        let total = match query
-            .count()
-            .get_result::<i64>(&mut conn)
-        {
-            Ok(count) => count,
-            Err(e) => {
-                return EmployeesListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to count employees: {}", e),
-                }))
-            }
-        };
 
         // Get employees with pagination
         let results = match query
@@ -265,7 +276,16 @@ impl EmployeesApi {
 
     /// Create new employee
     #[oai(path = "/", method = "post")]
-    async fn create_employee(&self, Json(new_employee): Json<NewEmployee>) -> EmployeeCreateResponse {
+    async fn create_employee(&self, Json(req): Json<NewEmployeeRequest>) -> EmployeeCreateResponse {
+        let new_employee = match req.to_new_employee() {
+            Ok(emp) => emp,
+            Err(e) => {
+                return EmployeeCreateResponse::BadRequest(Json(ErrorResponse {
+                    error: "validation_error".to_string(),
+                    message: e,
+                }))
+            }
+        };
         let mut conn = match self.db_pool.get() {
             Ok(conn) => conn,
             Err(e) => {
@@ -311,8 +331,17 @@ impl EmployeesApi {
     async fn update_employee(
         &self,
         Path(id): Path<i32>,
-        Json(update_data): Json<UpdateEmployee>,
+        Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
+        let update_data = match req.to_update_employee() {
+            Ok(data) => data,
+            Err(e) => {
+                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
+                    error: "validation_error".to_string(),
+                    message: e,
+                }))
+            }
+        };
         let mut conn = match self.db_pool.get() {
             Ok(conn) => conn,
             Err(e) => {
