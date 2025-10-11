@@ -63,6 +63,7 @@ async fn main() -> Result<(), std::io::Error> {
             routes::api::Api::new(db_pool.clone()),
             routes::auth::AuthApi::new(auth_service),
             routes::employees::EmployeesApi::new(db_pool.clone()),
+            routes::activity_log::ActivityLogApi::new(db_pool.clone()),
         ),
         &config.app.name,
         env!("CARGO_PKG_VERSION"),

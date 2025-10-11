@@ -10,7 +10,7 @@ poem-openapi = { version = "5.1.16", features = ["swagger-ui", "rapidoc", "redoc
 tokio = { version = "1.47.1", features = ["full"] }
 
 # Database
-diesel = { version = "2.3.2", features = ["postgres", "r2d2", "chrono", "uuid"] }
+diesel = { version = "2.3.2", features = ["postgres", "r2d2", "chrono", "uuid", "serde_json"] }
 diesel-async = { version = "0.7.3", features = ["postgres", "deadpool"] }
 diesel_migrations = "2.2"
 

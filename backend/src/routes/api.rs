@@ -46,4 +46,6 @@ pub enum ApiTags {
     Positions,
     /// Equipment management
     Equipment,
+    /// Activity log and audit
+    ActivityLog,
 }
