@@ -403,6 +403,7 @@ impl EmployeesApi {
         let update_data = match req.to_update_employee() {
             Ok(data) => data,
             Err(e) => {
+                tracing::error!("Validation error in update_employee: {}", e);
                 return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
                     error: "validation_error".to_string(),
                     message: e,
@@ -528,10 +529,13 @@ impl EmployeesApi {
                     message: format!("Employee with id {} not found", id),
                 }))
             }
-            Err(e) => EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to update employee: {}", e),
-            })),
+            Err(e) => {
+                tracing::error!("Database error in update_employee: {:?}", e);
+                EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to update employee: {}", e),
+                }))
+            }
         }
     }
 
