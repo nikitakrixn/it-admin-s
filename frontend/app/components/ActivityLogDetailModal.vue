@@ -76,8 +76,49 @@
                     </div>
                   </div>
 
-                  <!-- Details JSON -->
-                  <div v-if="log.details" class="mt-6">
+                  <!-- Changes (for updates) -->
+                  <div v-if="log.details?.changes && typeof log.details.changes === 'object'" class="mt-6">
+                    <label class="text-xs font-medium text-gray-500 uppercase mb-2 block">Изменения</label>
+                    <div class="space-y-2">
+                      <div
+                        v-for="(change, field) in log.details.changes"
+                        :key="String(field)"
+                        class="bg-gray-50 rounded-lg p-3 border border-gray-200"
+                      >
+                        <div class="text-xs font-medium text-gray-700 mb-1">{{ fieldLabel(String(field)) }}</div>
+                        <div class="flex items-center gap-2 text-sm">
+                          <span class="text-red-600 line-through">{{ formatValue(change.old) }}</span>
+                          <Icon name="ri:arrow-right-line" class="text-gray-400" />
+                          <span class="text-green-600 font-medium">{{ formatValue(change.new) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Deleted Entity Info -->
+                  <div v-if="log.action === 'deleted' && log.details && !log.details.changes" class="mt-6">
+                    <label class="text-xs font-medium text-gray-500 uppercase mb-2 block">Информация об удаленной записи</label>
+                    <div class="bg-red-50 rounded-lg p-4 border border-red-200 space-y-2">
+                      <div v-for="(value, key) in log.details" :key="String(key)" class="flex justify-between text-sm">
+                        <span class="font-medium text-gray-700">{{ fieldLabel(String(key)) }}:</span>
+                        <span class="text-gray-900">{{ formatValue(value) }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Created Entity Info -->
+                  <div v-if="log.action === 'created' && log.details && !log.details.changes" class="mt-6">
+                    <label class="text-xs font-medium text-gray-500 uppercase mb-2 block">Информация о созданной записи</label>
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-200 space-y-2">
+                      <div v-for="(value, key) in log.details" :key="String(key)" class="flex justify-between text-sm">
+                        <span class="font-medium text-gray-700">{{ fieldLabel(String(key)) }}:</span>
+                        <span class="text-gray-900">{{ formatValue(value) }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Other Details -->
+                  <div v-if="log.details && !log.details.changes && log.action !== 'deleted' && log.action !== 'created'" class="mt-6">
                     <label class="text-xs font-medium text-gray-500 uppercase mb-2 block">Детали</label>
                     <pre class="bg-gray-50 rounded-lg p-4 text-xs overflow-x-auto border border-gray-200">{{ JSON.stringify(log.details, null, 2) }}</pre>
                   </div>
@@ -156,5 +197,33 @@ const entityTypeLabel = (type: string) => {
     position: 'Должность'
   }
   return labels[type] || type
+}
+
+const fieldLabel = (field: string) => {
+  const labels: Record<string, string> = {
+    first_name: 'Имя',
+    last_name: 'Фамилия',
+    middle_name: 'Отчество',
+    email: 'Email',
+    phone: 'Телефон',
+    status: 'Статус',
+    position_id: 'Должность',
+    department_id: 'Отдел',
+    hire_date: 'Дата приема',
+    termination_date: 'Дата увольнения',
+    employee_name: 'ФИО',
+    position: 'Должность',
+    department: 'Отдел',
+    department_name: 'Название отдела',
+    position_name: 'Название должности',
+    description: 'Описание'
+  }
+  return labels[field] || field
+}
+
+const formatValue = (value: any) => {
+  if (value === null || value === undefined) return '-'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  return String(value)
 }
 </script>

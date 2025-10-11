@@ -163,6 +163,69 @@
           </div>
         </div>
       </div>
+
+      <!-- History Section -->
+      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-200">
+          <div class="flex items-center">
+            <Icon name="ri:history-line" class="text-indigo-500 text-xl mr-2" />
+            <h3 class="text-base font-semibold text-gray-900">История изменений</h3>
+          </div>
+        </div>
+        <div class="p-6">
+          <div v-if="historyPending" class="flex justify-center py-8">
+            <Icon name="ri:loader-4-line" class="text-2xl text-indigo-600 animate-spin" />
+          </div>
+          <div v-else-if="history && history.length > 0" class="space-y-4">
+            <div
+              v-for="log in history"
+              :key="log.id"
+              class="flex gap-4 pb-4 border-b border-gray-100 last:border-0"
+            >
+              <div class="flex-shrink-0">
+                <div :class="{
+                  'bg-green-100 text-green-600': log.action === 'created',
+                  'bg-blue-100 text-blue-600': log.action === 'updated',
+                  'bg-red-100 text-red-600': log.action === 'deleted'
+                }" class="h-10 w-10 rounded-full flex items-center justify-center">
+                  <Icon :name="{
+                    'created': 'ri:add-line',
+                    'updated': 'ri:edit-line',
+                    'deleted': 'ri:delete-bin-line'
+                  }[log.action] || 'ri:information-line'" class="text-lg" />
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between mb-1">
+                  <p class="text-sm font-medium text-gray-900">
+                    {{ actionLabel(log.action) }}
+                  </p>
+                  <time class="text-xs text-gray-500">{{ formatDateTime(log.created_at) }}</time>
+                </div>
+                <p class="text-xs text-gray-600 mb-2">
+                  {{ log.user_email || 'Система' }}
+                </p>
+                <div v-if="log.details?.changes" class="space-y-1">
+                  <div
+                    v-for="(change, field) in log.details.changes"
+                    :key="String(field)"
+                    class="text-xs bg-gray-50 rounded px-2 py-1"
+                  >
+                    <span class="font-medium text-gray-700">{{ fieldLabel(String(field)) }}:</span>
+                    <span class="text-red-600 line-through mx-1">{{ formatValue(change.old) }}</span>
+                    →
+                    <span class="text-green-600 font-medium mx-1">{{ formatValue(change.new) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-8 text-gray-500">
+            <Icon name="ri:history-line" class="text-4xl text-gray-300 mb-2 mx-auto" />
+            <p class="text-sm">История изменений пуста</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <ConfirmModal
@@ -187,14 +250,23 @@ definePageMeta({
 })
 
 const route = useRoute()
+const router = useRouter()
 const employeeId = parseInt(route.params.id as string)
 
 const { fetchEmployee, deleteEmployee } = useEmployees()
+const { fetchEntityHistory } = useActivityLog()
 
 const { data: employee, pending, error } = await useAsyncData(
   `employee-${employeeId}`,
   () => fetchEmployee(employeeId)
 )
+
+const { data: historyData, pending: historyPending } = await useAsyncData(
+  `employee-history-${employeeId}`,
+  () => fetchEntityHistory('employee', employeeId)
+)
+
+const history = computed(() => historyData.value?.logs || [])
 
 useHead({
   title: computed(() => employee.value ? employee.value.full_name : 'Сотрудник')
@@ -207,6 +279,45 @@ const statusLabel = (status: string) => {
     terminated: 'Уволен'
   }
   return labels[status] || status
+}
+
+const actionLabel = (action: string) => {
+  const labels: Record<string, string> = {
+    created: 'Создан',
+    updated: 'Обновлен',
+    deleted: 'Удален'
+  }
+  return labels[action] || action
+}
+
+const fieldLabel = (field: string) => {
+  const labels: Record<string, string> = {
+    first_name: 'Имя',
+    last_name: 'Фамилия',
+    middle_name: 'Отчество',
+    email: 'Email',
+    phone: 'Телефон',
+    status: 'Статус',
+    position_id: 'Должность',
+    department_id: 'Отдел'
+  }
+  return labels[field] || field
+}
+
+const formatValue = (value: any) => {
+  if (value === null || value === undefined) return '-'
+  return String(value)
+}
+
+const formatDateTime = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 const showDeleteModal = ref(false)

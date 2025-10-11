@@ -373,18 +373,6 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
-        // Serialize request for logging before it's moved
-        let req_json = serde_json::to_value(&req).ok();
-        
-        let update_data = match req.to_update_employee() {
-            Ok(data) => data,
-            Err(e) => {
-                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                    error: "validation_error".to_string(),
-                    message: e,
-                }))
-            }
-        };
         let mut conn = match self.db_pool.get() {
             Ok(conn) => conn,
             Err(e) => {
@@ -395,14 +383,68 @@ impl EmployeesApi {
             }
         };
 
+        // Get old values before update
+        let old_employee = match employees::table.find(id).first::<Employee>(&mut conn) {
+            Ok(emp) => emp,
+            Err(diesel::NotFound) => {
+                return EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
+                    error: "not_found".to_string(),
+                    message: format!("Employee with id {} not found", id),
+                }))
+            }
+            Err(e) => {
+                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
+                    error: "database_error".to_string(),
+                    message: format!("Failed to get employee: {}", e),
+                }))
+            }
+        };
+
+        let update_data = match req.to_update_employee() {
+            Ok(data) => data,
+            Err(e) => {
+                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
+                    error: "validation_error".to_string(),
+                    message: e,
+                }))
+            }
+        };
+
         let result = diesel::update(employees::table.find(id))
             .set(&update_data)
             .get_result::<Employee>(&mut conn);
 
         match result {
             Ok(employee) => {
-                // Log activity
-                if let Some(changes) = req_json {
+                // Log activity with old and new values
+                let mut changes = serde_json::Map::new();
+                
+                if old_employee.first_name != employee.first_name {
+                    changes.insert("first_name".to_string(), serde_json::json!({
+                        "old": old_employee.first_name,
+                        "new": employee.first_name
+                    }));
+                }
+                if old_employee.last_name != employee.last_name {
+                    changes.insert("last_name".to_string(), serde_json::json!({
+                        "old": old_employee.last_name,
+                        "new": employee.last_name
+                    }));
+                }
+                if old_employee.email != employee.email {
+                    changes.insert("email".to_string(), serde_json::json!({
+                        "old": old_employee.email,
+                        "new": employee.email
+                    }));
+                }
+                if old_employee.status != employee.status {
+                    changes.insert("status".to_string(), serde_json::json!({
+                        "old": old_employee.status,
+                        "new": employee.status
+                    }));
+                }
+                
+                if !changes.is_empty() {
                     let details = serde_json::json!({
                         "employee_name": employee.full_name(),
                         "changes": changes,
@@ -458,11 +500,22 @@ impl EmployeesApi {
             }
         };
 
-        // Get employee name before deletion
-        let employee_name = employees::table
+        // Get full employee info before deletion
+        let employee_info = employees::table
             .find(id)
-            .select((employees::first_name, employees::last_name))
-            .first::<(String, String)>(&mut conn)
+            .left_join(positions::table)
+            .left_join(departments::table)
+            .select((
+                employees::first_name,
+                employees::last_name,
+                employees::middle_name,
+                employees::email,
+                employees::phone,
+                employees::status,
+                positions::name.nullable(),
+                departments::name.nullable(),
+            ))
+            .first::<(String, String, Option<String>, Option<String>, Option<String>, String, Option<String>, Option<String>)>(&mut conn)
             .ok();
 
         let result = diesel::delete(employees::table.find(id)).execute(&mut conn);
@@ -473,10 +526,21 @@ impl EmployeesApi {
                 message: format!("Employee with id {} not found", id),
             })),
             Ok(_) => {
-                // Log activity
-                if let Some((first_name, last_name)) = employee_name {
+                // Log activity with full employee info
+                if let Some((first_name, last_name, middle_name, email, phone, status, position, department)) = employee_info {
+                    let full_name = if let Some(mn) = middle_name {
+                        format!("{} {} {}", last_name, first_name, mn)
+                    } else {
+                        format!("{} {}", last_name, first_name)
+                    };
+                    
                     let details = serde_json::json!({
-                        "employee_name": format!("{} {}", first_name, last_name),
+                        "employee_name": full_name,
+                        "email": email,
+                        "phone": phone,
+                        "status": status,
+                        "position": position,
+                        "department": department,
                     });
                     self.activity_log.log_with_details_async(
                         None,
