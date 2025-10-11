@@ -114,11 +114,14 @@
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 IP адрес
               </th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Действия
+              </th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             <tr v-if="!logs.length">
-              <td colspan="6" class="px-6 py-16 text-center">
+              <td colspan="7" class="px-6 py-16 text-center">
                 <div class="flex flex-col items-center justify-center">
                   <div class="h-24 w-24 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-4">
                     <Icon name="ri:history-line" class="text-5xl text-gray-400" />
@@ -168,6 +171,15 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-500">{{ log.ip_address || '-' }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right">
+                <button
+                  @click="openDetailModal(log)"
+                  class="inline-flex items-center p-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-all"
+                  title="Подробнее"
+                >
+                  <Icon name="ri:eye-line" class="text-lg" />
+                </button>
               </td>
             </tr>
           </tbody>
@@ -230,6 +242,13 @@
         </div>
       </div>
     </div>
+
+    <!-- Detail Modal -->
+    <ActivityLogDetailModal
+      :show="showDetailModal"
+      :log="selectedLog"
+      @close="closeDetailModal"
+    />
   </div>
 </template>
 
@@ -330,5 +349,18 @@ const formatTime = (dateStr: string) => {
     minute: '2-digit',
     second: '2-digit'
   })
+}
+
+const showDetailModal = ref(false)
+const selectedLog = ref<any>(null)
+
+const openDetailModal = (log: any) => {
+  selectedLog.value = log
+  showDetailModal.value = true
+}
+
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  selectedLog.value = null
 }
 </script>
