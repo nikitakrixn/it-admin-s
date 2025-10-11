@@ -1,13 +1,20 @@
 <template>
   <div>
     <!-- Header -->
-    <div class="mb-6">
-      <NuxtLink :to="`/employees/${employeeId}`" class="text-sm text-gray-500 hover:text-gray-700 flex items-center mb-2">
-        <Icon name="ri:arrow-left-line" class="mr-1" />
+    <div class="mb-8">
+      <NuxtLink :to="`/employees/${employeeId}`" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4 group">
+        <Icon name="ri:arrow-left-line" class="mr-1 group-hover:-translate-x-1 transition-transform" />
         Назад к просмотру
       </NuxtLink>
-      <h1 class="text-2xl font-bold text-gray-900">Редактировать сотрудника</h1>
-      <p class="mt-1 text-sm text-gray-500">Обновите информацию о сотруднике</p>
+      <div class="flex items-center">
+        <div class="h-14 w-14 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center mr-4 shadow-lg">
+          <Icon name="ri:edit-line" class="text-white text-2xl" />
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Редактировать сотрудника</h1>
+          <p class="mt-1 text-sm text-gray-600">Обновите информацию о сотруднике</p>
+        </div>
+      </div>
     </div>
 
     <!-- Loading -->
@@ -16,11 +23,16 @@
     </div>
 
     <!-- Form -->
-    <form v-else-if="employee" @submit.prevent="handleSubmit" class="bg-white shadow-sm rounded-lg border border-gray-200">
-      <div class="p-6 space-y-6">
+    <form v-else-if="employee" @submit.prevent="handleSubmit" class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+      <div class="p-6 space-y-8">
         <!-- Personal Info -->
         <div>
-          <h3 class="text-lg font-medium text-gray-900 mb-4">Личная информация</h3>
+          <div class="flex items-center mb-5">
+            <div class="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+              <Icon name="ri:user-line" class="text-blue-600 text-lg" />
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">Личная информация</h3>
+          </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label for="last_name" class="block text-sm font-medium text-gray-700">
@@ -61,8 +73,13 @@
         </div>
 
         <!-- Work Info -->
-        <div>
-          <h3 class="text-lg font-medium text-gray-900 mb-4">Рабочая информация</h3>
+        <div class="pt-6 border-t border-gray-200">
+          <div class="flex items-center mb-5">
+            <div class="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
+              <Icon name="ri:briefcase-line" class="text-purple-600 text-lg" />
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">Рабочая информация</h3>
+          </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label for="department_id" class="block text-sm font-medium text-gray-700">
@@ -135,8 +152,13 @@
         </div>
 
         <!-- Contact Info -->
-        <div>
-          <h3 class="text-lg font-medium text-gray-900 mb-4">Контактная информация</h3>
+        <div class="pt-6 border-t border-gray-200">
+          <div class="flex items-center mb-5">
+            <div class="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center mr-3">
+              <Icon name="ri:contacts-line" class="text-green-600 text-lg" />
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900">Контактная информация</h3>
+          </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label for="email" class="block text-sm font-medium text-gray-700">
@@ -175,10 +197,13 @@
         </div>
 
         <!-- Notes -->
-        <div>
-          <label for="notes" class="block text-sm font-medium text-gray-700">
-            Примечания
-          </label>
+        <div class="pt-6 border-t border-gray-200">
+          <div class="flex items-center mb-3">
+            <Icon name="ri:file-text-line" class="text-gray-400 mr-2" />
+            <label for="notes" class="block text-sm font-medium text-gray-700">
+              Примечания
+            </label>
+          </div>
           <textarea
             id="notes"
             v-model="form.notes"
@@ -199,21 +224,29 @@
       </div>
 
       <!-- Actions -->
-      <div class="bg-gray-50 px-6 py-4 flex items-center justify-end space-x-3 rounded-b-lg">
-        <NuxtLink
-          :to="`/employees/${employeeId}`"
-          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-        >
-          Отмена
-        </NuxtLink>
-        <button
-          type="submit"
-          :disabled="loading"
-          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-        >
-          <Icon v-if="loading" name="ri:loader-4-line" class="mr-2 animate-spin" />
-          {{ loading ? 'Сохранение...' : 'Сохранить изменения' }}
-        </button>
+      <div class="bg-gradient-to-r from-gray-50 to-white px-6 py-5 flex items-center justify-between border-t border-gray-200">
+        <p class="text-sm text-gray-500">
+          <Icon name="ri:information-line" class="inline mr-1" />
+          Поля отмеченные <span class="text-red-500">*</span> обязательны для заполнения
+        </p>
+        <div class="flex items-center space-x-3">
+          <NuxtLink
+            :to="`/employees/${employeeId}`"
+            class="inline-flex items-center px-5 py-2.5 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all"
+          >
+            <Icon name="ri:close-line" class="mr-2" />
+            Отмена
+          </NuxtLink>
+          <button
+            type="submit"
+            :disabled="loading"
+            class="inline-flex items-center px-5 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            <Icon v-if="loading" name="ri:loader-4-line" class="mr-2 animate-spin" />
+            <Icon v-else name="ri:save-line" class="mr-2" />
+            {{ loading ? 'Сохранение...' : 'Сохранить изменения' }}
+          </button>
+        </div>
       </div>
     </form>
   </div>
