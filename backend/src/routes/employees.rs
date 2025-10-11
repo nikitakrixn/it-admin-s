@@ -23,6 +23,7 @@ pub struct EmployeeListResponse {
 }
 
 #[derive(Serialize, Object)]
+#[oai(rename = "EmployeeErrorResponse")]
 pub struct ErrorResponse {
     pub error: String,
     pub message: String,
