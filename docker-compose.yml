@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: itadmin-postgres
+    environment:
+      POSTGRES_DB: itadmin
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - itadmin-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d itadmin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for caching and sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: itadmin-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - itadmin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Rust Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: itadmin-backend
+    environment:
+      DATABASE_URL: postgres://admin:secure_password@postgres:5432/itadmin
+      REDIS_URL: redis://redis:6379
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      JWT_SECRET: your-super-secret-jwt-key-change-this
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - itadmin-network
+    volumes:
+      - ./backend:/app
+      - backend_target:/app/target
+    restart: unless-stopped
+
+  # Nuxt Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: itadmin-frontend
+    environment:
+      NUXT_PUBLIC_API_BASE: http://localhost:8000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - itadmin-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.nuxt
+    restart: unless-stopped
+
+networks:
+  itadmin-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_target:

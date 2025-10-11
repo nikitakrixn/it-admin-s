@@ -1,0 +1,62 @@
+[package]
+name = "it-admin-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Web Framework
+poem = { version = "3.1.12", features = ["websocket", "multipart", "compression"] }
+poem-openapi = { version = "5.1.16", features = ["swagger-ui", "rapidoc", "redoc"] }
+tokio = { version = "1.47.1", features = ["full"] }
+
+# Database
+diesel = { version = "2.3.2", features = ["postgres", "r2d2", "chrono", "uuid"] }
+diesel-async = { version = "0.7.3", features = ["postgres", "deadpool"] }
+diesel_migrations = "2.2"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication & Security
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+argon2 = "0.5"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# Date & Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Environment & Config
+dotenvy = "0.15"
+config = "0.15.18"
+
+# Logging & Tracing
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+
+# Error Handling
+anyhow = "1.0.100"
+thiserror = "2.0.17"
+
+# LDAP Integration (Active Directory)
+ldap3 = { version = "0.12.1", features = ["tls"] }
+
+# Async utilities
+futures = "0.3.31"
+async-trait = "0.1.89"
+
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
+
+# HTTP Client (for external APIs)
+reqwest = { version = "0.12.23", features = ["json"] }
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
