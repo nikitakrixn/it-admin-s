@@ -1,81 +1,76 @@
 <template>
-  <div>
-    <div class="mb-6">
-      <NuxtLink to="/employees" class="text-sm text-gray-500 hover:text-gray-700 flex items-center mb-2">
-        <Icon name="ri:arrow-left-line" class="mr-1" />
-        Назад к списку
+  <div class="space-y-6">
+    <div class="flex items-center gap-4 mb-8">
+      <NuxtLink to="/employees" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <Icon name="ri:arrow-left-line" class="text-xl" />
       </NuxtLink>
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Профиль сотрудника</h1>
+        <p class="text-sm text-gray-600">Детальная информация</p>
+      </div>
     </div>
 
     <div v-if="pending" class="flex justify-center py-12">
       <Icon name="ri:loader-4-line" class="text-4xl text-primary-600 animate-spin" />
     </div>
 
-    <div v-else-if="error" class="rounded-md bg-red-50 p-4">
-      <div class="flex">
-        <Icon name="ri:error-warning-line" class="h-5 w-5 text-red-400" />
-        <div class="ml-3">
-          <p class="text-sm font-medium text-red-800">Ошибка загрузки данных сотрудника</p>
-        </div>
+    <div v-else-if="error" class="card">
+      <div class="p-8 text-center">
+        <Icon name="ri:error-warning-line" class="text-5xl text-red-500 mx-auto mb-4" />
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Ошибка загрузки</h3>
+        <p class="text-sm text-gray-600">Не удалось загрузить данные сотрудника</p>
       </div>
     </div>
 
     <div v-else-if="employee" class="space-y-6">
-      <!-- Clean Header Card -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div class="card">
         <div class="p-6">
           <div class="flex items-start justify-between">
-            <!-- Avatar and Info -->
-            <div class="flex items-start space-x-4">
-              <div class="h-20 w-20 rounded-xl bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                <span class="text-2xl font-bold text-white">
+            <div class="flex items-start gap-4">
+              <div class="h-24 w-24 rounded-2xl gradient-primary flex items-center justify-center flex-shrink-0 shadow-lg">
+                <span class="text-3xl font-bold text-white">
                   {{ employee.first_name.charAt(0) }}{{ employee.last_name.charAt(0) }}
                 </span>
               </div>
               <div>
-                <h1 class="text-2xl font-bold text-gray-900">{{ employee.full_name }}</h1>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-50 text-primary-700 border border-primary-200">
-                    <Icon name="ri:briefcase-line" class="mr-1.5" />
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ employee.full_name }}</h2>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="badge bg-primary-100 text-primary-800 flex items-center gap-1">
+                    <Icon name="ri:briefcase-line" />
                     {{ employee.position_name || 'Должность не указана' }}
                   </span>
-                  <span v-if="employee.department_name" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">
-                    <Icon name="ri:building-line" class="mr-1.5" />
+                  <span v-if="employee.department_name" class="badge bg-purple-100 text-purple-800 flex items-center gap-1">
+                    <Icon name="ri:building-line" />
                     {{ employee.department_name }}
                   </span>
-                  <span :class="{
-                    'bg-green-50 text-green-700 border-green-200': employee.status === 'active',
-                    'bg-gray-50 text-gray-700 border-gray-200': employee.status === 'inactive',
-                    'bg-blue-50 text-blue-700 border-blue-200': employee.status === 'vacation',
-                    'bg-yellow-50 text-yellow-700 border-yellow-200': employee.status === 'sick_leave',
-                    'bg-red-50 text-red-700 border-red-200': employee.status === 'terminated'
-                  }" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border">
-                    <span :class="{
-                      'bg-green-500': employee.status === 'active',
-                      'bg-gray-500': employee.status === 'inactive',
-                      'bg-blue-500': employee.status === 'vacation',
-                      'bg-yellow-500': employee.status === 'sick_leave',
-                      'bg-red-500': employee.status === 'terminated'
-                    }" class="h-1.5 w-1.5 rounded-full mr-1.5"></span>
+                  <span
+                    :class="{
+                      'bg-green-100 text-green-800': employee.status === 'active',
+                      'bg-gray-100 text-gray-800': employee.status === 'inactive',
+                      'bg-red-100 text-red-800': employee.status === 'terminated'
+                    }"
+                    class="badge flex items-center gap-1"
+                  >
+                    <span
+                      :class="{
+                        'bg-green-500': employee.status === 'active',
+                        'bg-gray-500': employee.status === 'inactive',
+                        'bg-red-500': employee.status === 'terminated'
+                      }"
+                      class="h-2 w-2 rounded-full animate-pulse"
+                    />
                     {{ statusLabel(employee.status) }}
                   </span>
                 </div>
               </div>
             </div>
 
-            <!-- Actions -->
-            <div class="flex space-x-2">
-              <NuxtLink
-                :to="`/employees/${employee.id}/edit`"
-                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-all"
-              >
+            <div class="flex gap-2">
+              <NuxtLink :to="`/employees/${employee.id}/edit`" class="btn btn-secondary">
                 <Icon name="ri:edit-line" class="mr-2" />
                 Редактировать
               </NuxtLink>
-              <button
-                @click="openDeleteModal"
-                class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-all"
-              >
+              <button @click="openDeleteModal" class="btn bg-red-50 text-red-700 hover:bg-red-100 border border-red-200">
                 <Icon name="ri:delete-bin-line" class="mr-2" />
                 Удалить
               </button>
@@ -84,271 +79,163 @@
         </div>
       </div>
 
-      <!-- Info Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Personal Info -->
-        <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-          <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
-            <h3 class="text-base font-semibold text-gray-900 flex items-center">
-              <div class="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
-                <Icon name="ri:user-line" class="text-blue-600" />
+        <div class="card">
+          <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <Icon name="ri:user-line" class="text-blue-600 text-xl" />
               </div>
-              Личная информация
-            </h3>
+              <h3 class="text-lg font-semibold text-gray-900">Личная информация</h3>
+            </div>
           </div>
-          <div class="px-6 py-5 space-y-5">
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:user-3-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">ФИО</dt>
-                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.full_name }}</dd>
-              </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <p class="text-xs font-medium text-gray-500 mb-1">Фамилия</p>
+              <p class="text-sm text-gray-900 font-medium">{{ employee.last_name }}</p>
             </div>
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:mail-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</dt>
-                <dd class="mt-1 text-sm text-gray-900">
-                  <a v-if="employee.email" :href="`mailto:${employee.email}`" class="text-primary-600 hover:text-primary-900 transition-colors">
-                    {{ employee.email }}
-                  </a>
-                  <span v-else class="text-gray-400">Не указан</span>
-                </dd>
-              </div>
+            <div>
+              <p class="text-xs font-medium text-gray-500 mb-1">Имя</p>
+              <p class="text-sm text-gray-900 font-medium">{{ employee.first_name }}</p>
             </div>
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:phone-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Телефон</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ employee.phone || 'Не указан' }}</dd>
-              </div>
+            <div v-if="employee.middle_name">
+              <p class="text-xs font-medium text-gray-500 mb-1">Отчество</p>
+              <p class="text-sm text-gray-900 font-medium">{{ employee.middle_name }}</p>
+            </div>
+            <div v-if="employee.ad_username" class="pt-4 border-t border-gray-100">
+              <p class="text-xs font-medium text-gray-500 mb-1">AD Username</p>
+              <p class="text-sm text-gray-900 font-medium flex items-center gap-2">
+                <Icon name="ri:windows-fill" class="text-blue-600" />
+                {{ employee.ad_username }}
+              </p>
             </div>
           </div>
         </div>
 
-        <!-- Work Info -->
-        <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-          <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-white border-b border-gray-200">
-            <h3 class="text-base font-semibold text-gray-900 flex items-center">
-              <div class="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
-                <Icon name="ri:briefcase-line" class="text-purple-600" />
+        <div class="card">
+          <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <Icon name="ri:contacts-line" class="text-green-600 text-xl" />
               </div>
-              Рабочая информация
-            </h3>
+              <h3 class="text-lg font-semibold text-gray-900">Контакты</h3>
+            </div>
           </div>
-          <div class="px-6 py-5 space-y-5">
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:building-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Отдел</dt>
-                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.department_name || 'Не указан' }}</dd>
-              </div>
+          <div class="p-6 space-y-4">
+            <div v-if="employee.email">
+              <p class="text-xs font-medium text-gray-500 mb-1">Email</p>
+              <a :href="`mailto:${employee.email}`" class="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-2">
+                <Icon name="ri:mail-line" />
+                {{ employee.email }}
+              </a>
             </div>
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:award-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Должность</dt>
-                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.position_name || 'Не указана' }}</dd>
-              </div>
+            <div v-else class="text-sm text-gray-400">Email не указан</div>
+
+            <div v-if="employee.phone" class="pt-4 border-t border-gray-100">
+              <p class="text-xs font-medium text-gray-500 mb-1">Телефон</p>
+              <a :href="`tel:${employee.phone}`" class="text-sm text-gray-900 font-medium flex items-center gap-2">
+                <Icon name="ri:phone-line" class="text-green-600" />
+                {{ employee.phone }}
+              </a>
             </div>
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:checkbox-circle-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</dt>
-                <dd class="mt-1">
-                  <span :class="{
-                    'bg-green-100 text-green-800 ring-1 ring-green-600/20': employee.status === 'active',
-                    'bg-gray-100 text-gray-800 ring-1 ring-gray-600/20': employee.status === 'inactive',
-                    'bg-blue-100 text-blue-800 ring-1 ring-blue-600/20': employee.status === 'vacation',
-                    'bg-yellow-100 text-yellow-800 ring-1 ring-yellow-600/20': employee.status === 'sick_leave',
-                    'bg-red-100 text-red-800 ring-1 ring-red-600/20': employee.status === 'terminated'
-                  }" class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full">
-                    <span :class="{
-                      'bg-green-500': employee.status === 'active',
-                      'bg-gray-500': employee.status === 'inactive',
-                      'bg-blue-500': employee.status === 'vacation',
-                      'bg-yellow-500': employee.status === 'sick_leave',
-                      'bg-red-500': employee.status === 'terminated'
-                    }" class="h-1.5 w-1.5 rounded-full mr-2"></span>
-                    {{ statusLabel(employee.status) }}
-                  </span>
-                </dd>
-              </div>
-            </div>
+            <div v-else class="pt-4 border-t border-gray-100 text-sm text-gray-400">Телефон не указан</div>
           </div>
         </div>
 
-        <!-- Additional Info -->
-        <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-          <div class="px-6 py-4 bg-gradient-to-r from-amber-50 to-white border-b border-gray-200">
-            <h3 class="text-base font-semibold text-gray-900 flex items-center">
-              <div class="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center mr-3">
-                <Icon name="ri:information-line" class="text-amber-600" />
+        <div class="card">
+          <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Icon name="ri:briefcase-line" class="text-purple-600 text-xl" />
               </div>
-              Дополнительно
-            </h3>
+              <h3 class="text-lg font-semibold text-gray-900">Работа</h3>
+            </div>
           </div>
-          <div class="px-6 py-5 space-y-5">
-            <!-- AD Username -->
-            <div v-if="employee.ad_username" class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:windows-fill" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Directory</dt>
-                <dd class="mt-1 text-sm font-medium text-gray-900">{{ employee.ad_username }}</dd>
-              </div>
+          <div class="p-6 space-y-4">
+            <div v-if="employee.hire_date">
+              <p class="text-xs font-medium text-gray-500 mb-1">Дата приема</p>
+              <p class="text-sm text-gray-900 font-medium flex items-center gap-2">
+                <Icon name="ri:calendar-line" class="text-purple-600" />
+                {{ formatDate(employee.hire_date) }}
+              </p>
             </div>
-
-            <!-- Work Duration -->
-            <div v-if="employee.hire_date" class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:time-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Стаж работы</dt>
-                <dd class="mt-1 text-sm font-medium text-gray-900">{{ calculateWorkDuration(employee.hire_date) }}</dd>
-              </div>
+            <div v-if="employee.termination_date" class="pt-4 border-t border-gray-100">
+              <p class="text-xs font-medium text-gray-500 mb-1">Дата увольнения</p>
+              <p class="text-sm text-gray-900 font-medium flex items-center gap-2">
+                <Icon name="ri:calendar-close-line" class="text-red-600" />
+                {{ formatDate(employee.termination_date) }}
+              </p>
             </div>
-
-            <!-- Notes -->
-            <div v-if="employee.notes" class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:sticky-note-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Заметки</dt>
-                <dd class="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{{ employee.notes }}</dd>
-              </div>
-            </div>
-
-            <!-- Created/Updated -->
-            <div class="flex items-start">
-              <div class="flex-shrink-0">
-                <div class="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Icon name="ri:calendar-line" class="text-gray-600" />
-                </div>
-              </div>
-              <div class="ml-4 flex-1">
-                <dt class="text-xs font-medium text-gray-500 uppercase tracking-wide">Запись создана</dt>
-                <dd class="mt-1 text-sm text-gray-700">{{ formatDate(employee.created_at) }}</dd>
-                <dd v-if="employee.updated_at !== employee.created_at" class="mt-1 text-xs text-gray-500">
-                  Обновлена: {{ formatDate(employee.updated_at) }}
-                </dd>
-              </div>
+            <div v-if="!employee.hire_date && !employee.termination_date" class="text-sm text-gray-400">
+              Даты не указаны
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Computers Section (Placeholder) -->
-      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-        <div class="px-6 py-4 bg-gradient-to-r from-purple-50 to-white border-b border-gray-200">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <Icon name="ri:computer-line" class="text-purple-500 text-xl mr-2" />
-              <h3 class="text-base font-semibold text-gray-900">Компьютеры</h3>
+      <div v-if="employee.notes" class="card">
+        <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <Icon name="ri:file-text-line" class="text-amber-600 text-xl" />
             </div>
-            <span class="text-xs text-gray-500">Скоро</span>
-          </div>
-        </div>
-        <div class="p-6 text-center">
-          <div class="h-20 w-20 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-3">
-            <Icon name="ri:computer-line" class="text-3xl text-purple-500" />
-          </div>
-          <p class="text-sm text-gray-600">Здесь будут отображаться компьютеры, закрепленные за сотрудником</p>
-        </div>
-      </div>
-
-      <!-- History Section -->
-      <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-        <div class="px-6 py-4 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-200">
-          <div class="flex items-center">
-            <Icon name="ri:history-line" class="text-indigo-500 text-xl mr-2" />
-            <h3 class="text-base font-semibold text-gray-900">История изменений</h3>
+            <h3 class="text-lg font-semibold text-gray-900">Примечания</h3>
           </div>
         </div>
         <div class="p-6">
-          <div v-if="historyPending" class="flex justify-center py-8">
-            <Icon name="ri:loader-4-line" class="text-2xl text-indigo-600 animate-spin" />
+          <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ employee.notes }}</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <Icon name="ri:history-line" class="text-indigo-600 text-xl" />
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900">История изменений</h3>
+            </div>
+            <span class="badge bg-gray-100 text-gray-800">{{ activityLogs.length }}</span>
           </div>
-          <div v-else-if="history && history.length > 0" class="space-y-4">
-            <div
-              v-for="log in history"
-              :key="log.id"
-              class="flex gap-4 pb-4 border-b border-gray-100 last:border-0"
-            >
-              <div class="flex-shrink-0">
-                <div :class="{
-                  'bg-green-100 text-green-600': log.action === 'created',
-                  'bg-blue-100 text-blue-600': log.action === 'updated',
-                  'bg-red-100 text-red-600': log.action === 'deleted'
-                }" class="h-10 w-10 rounded-full flex items-center justify-center">
-                  <Icon :name="{
-                    'created': 'ri:add-line',
-                    'updated': 'ri:edit-line',
-                    'deleted': 'ri:delete-bin-line'
-                  }[log.action] || 'ri:information-line'" class="text-lg" />
-                </div>
+        </div>
+        <div v-if="loadingLogs" class="p-8 text-center">
+          <Icon name="ri:loader-4-line" class="text-3xl text-primary-600 animate-spin mx-auto" />
+        </div>
+        <div v-else-if="activityLogs.length === 0" class="p-8 text-center">
+          <Icon name="ri:history-line" class="text-4xl text-gray-300 mx-auto mb-2" />
+          <p class="text-sm text-gray-500">История изменений пуста</p>
+        </div>
+        <div v-else class="divide-y divide-gray-200">
+          <div
+            v-for="log in activityLogs"
+            :key="log.id"
+            class="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+            @click="openLogDetail(log)"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                :class="[
+                  'flex h-10 w-10 items-center justify-center rounded-lg flex-shrink-0',
+                  getActionColor(log.action)
+                ]"
+              >
+                <Icon :name="getActionIcon(log.action)" class="text-lg text-white" />
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between mb-1">
-                  <p class="text-sm font-medium text-gray-900">
-                    {{ actionLabel(log.action) }}
-                  </p>
-                  <time class="text-xs text-gray-500">{{ formatDateTime(log.created_at) }}</time>
-                </div>
-                <p class="text-xs text-gray-600 mb-2">
-                  {{ log.user_email || 'Система' }}
-                </p>
-                <div v-if="log.details?.changes" class="space-y-1">
-                  <div
-                    v-for="(change, field) in log.details.changes"
-                    :key="String(field)"
-                    class="text-xs bg-gray-50 rounded px-2 py-1"
-                  >
-                    <span class="font-medium text-gray-700">{{ fieldLabel(String(field)) }}:</span>
-                    <span class="text-red-600 line-through mx-1">{{ formatValue(change.old) }}</span>
-                    →
-                    <span class="text-green-600 font-medium mx-1">{{ formatValue(change.new) }}</span>
-                  </div>
+                <p class="text-sm font-medium text-gray-900">{{ getActionDescription(log) }}</p>
+                <div class="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                  <span class="flex items-center gap-1">
+                    <Icon name="ri:user-line" />
+                    {{ log.user_email || 'Система' }}
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <Icon name="ri:time-line" />
+                    {{ formatDateTime(log.created_at) }}
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
-          <div v-else class="text-center py-8 text-gray-500">
-            <Icon name="ri:history-line" class="text-4xl text-gray-300 mb-2 mx-auto" />
-            <p class="text-sm">История изменений пуста</p>
           </div>
         </div>
       </div>
@@ -365,81 +252,71 @@
       variant="danger"
       icon="ri:delete-bin-line"
       @confirm="confirmDelete"
-      @cancel="closeDeleteModal"
+      @cancel="showDeleteModal = false"
+    />
+
+    <ActivityLogDetailModal
+      :show="showLogModal"
+      :log="selectedLog"
+      @close="showLogModal = false"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 definePageMeta({
-  middleware: 'auth'
+  middleware: 'auth',
+  pageTransition: {
+    name: 'slide-up',
+    mode: 'out-in'
+  }
 })
 
 const route = useRoute()
 const router = useRouter()
-const employeeId = parseInt(route.params.id as string)
-
+const toast = useToast()
 const { fetchEmployee, deleteEmployee } = useEmployees()
 const { fetchEntityHistory } = useActivityLog()
 
+const employeeId = computed(() => Number(route.params.id))
+
 const { data: employee, pending, error } = await useAsyncData(
-  `employee-${employeeId}`,
-  () => fetchEmployee(employeeId)
+  `employee-${employeeId.value}`,
+  () => fetchEmployee(employeeId.value)
 )
-
-const { data: historyData, pending: historyPending } = await useAsyncData(
-  `employee-history-${employeeId}`,
-  () => fetchEntityHistory('employee', employeeId)
-)
-
-const history = computed(() => historyData.value?.logs || [])
 
 useHead({
-  title: computed(() => employee.value ? employee.value.full_name : 'Сотрудник')
+  title: employee.value ? `${employee.value.full_name} - Сотрудник` : 'Сотрудник'
 })
+
+const showDeleteModal = ref(false)
+const deleting = ref(false)
+const loadingLogs = ref(false)
+const activityLogs = ref<any[]>([])
+const showLogModal = ref(false)
+const selectedLog = ref<any>(null)
 
 const statusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: 'Активен',
     inactive: 'Неактивен',
-    terminated: 'Уволен',
+    vacation: 'В отпуске',
     sick_leave: 'На больничном',
-    vacation: 'В отпуске'
+    terminated: 'Уволен'
   }
   return labels[status] || status
 }
 
-const actionLabel = (action: string) => {
-  const labels: Record<string, string> = {
-    created: 'Создан',
-    updated: 'Обновлен',
-    deleted: 'Удален'
-  }
-  return labels[action] || action
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
 }
 
-const fieldLabel = (field: string) => {
-  const labels: Record<string, string> = {
-    first_name: 'Имя',
-    last_name: 'Фамилия',
-    middle_name: 'Отчество',
-    email: 'Email',
-    phone: 'Телефон',
-    status: 'Статус',
-    position_id: 'Должность',
-    department_id: 'Отдел'
-  }
-  return labels[field] || field
-}
-
-const formatValue = (value: any) => {
-  if (value === null || value === undefined) return '-'
-  return String(value)
-}
-
-const formatDateTime = (dateStr: string) => {
-  const date = new Date(dateStr)
-  return date.toLocaleString('ru-RU', {
+const formatDateTime = (date: string) => {
+  return new Date(date).toLocaleString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -448,44 +325,8 @@ const formatDateTime = (dateStr: string) => {
   })
 }
 
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  })
-}
-
-const calculateWorkDuration = (hireDateStr: string) => {
-  const hireDate = new Date(hireDateStr)
-  const now = new Date()
-  const diffTime = Math.abs(now.getTime() - hireDate.getTime())
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  
-  const years = Math.floor(diffDays / 365)
-  const months = Math.floor((diffDays % 365) / 30)
-  
-  if (years > 0) {
-    return `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} ${months > 0 ? `${months} мес.` : ''}`
-  } else if (months > 0) {
-    return `${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'}`
-  } else {
-    return `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`
-  }
-}
-
-const showDeleteModal = ref(false)
-const deleting = ref(false)
-
 const openDeleteModal = () => {
   showDeleteModal.value = true
-}
-
-const closeDeleteModal = () => {
-  if (!deleting.value) {
-    showDeleteModal.value = false
-  }
 }
 
 const confirmDelete = async () => {
@@ -494,14 +335,73 @@ const confirmDelete = async () => {
   deleting.value = true
   try {
     await deleteEmployee(employee.value.id)
-    
-    await refreshNuxtData('employees')
-    
-    await navigateTo('/employees')
+    toast.success('Сотрудник успешно удален')
+    router.push('/employees')
   } catch (err) {
-    alert('Ошибка при удалении сотрудника')
+    toast.error('Ошибка при удалении сотрудника')
+  } finally {
     deleting.value = false
-    showDeleteModal.value = false
   }
 }
+
+const loadActivityLogs = async () => {
+  if (!employee.value) return
+  
+  loadingLogs.value = true
+  try {
+    const result = await fetchEntityHistory('employee', employee.value.id)
+    activityLogs.value = result.logs
+  } catch (err) {
+    console.error('Failed to load activity logs:', err)
+  } finally {
+    loadingLogs.value = false
+  }
+}
+
+const openLogDetail = (log: any) => {
+  selectedLog.value = log
+  showLogModal.value = true
+}
+
+const getActionIcon = (action: string) => {
+  const icons: Record<string, string> = {
+    create: 'ri:add-circle-line',
+    created: 'ri:add-circle-line',
+    update: 'ri:edit-line',
+    updated: 'ri:edit-line',
+    delete: 'ri:delete-bin-line',
+    deleted: 'ri:delete-bin-line'
+  }
+  return icons[action.toLowerCase()] || 'ri:file-line'
+}
+
+const getActionColor = (action: string) => {
+  const colors: Record<string, string> = {
+    create: 'bg-green-500',
+    created: 'bg-green-500',
+    update: 'bg-blue-500',
+    updated: 'bg-blue-500',
+    delete: 'bg-red-500',
+    deleted: 'bg-red-500'
+  }
+  return colors[action.toLowerCase()] || 'bg-gray-500'
+}
+
+const getActionDescription = (log: any) => {
+  const actionLabels: Record<string, string> = {
+    create: 'Создан',
+    created: 'Создан',
+    update: 'Изменен',
+    updated: 'Изменен',
+    delete: 'Удален',
+    deleted: 'Удален'
+  }
+  
+  const action = actionLabels[log.action.toLowerCase()] || log.action
+  return `${action} профиль сотрудника`
+}
+
+onMounted(() => {
+  loadActivityLogs()
+})
 </script>

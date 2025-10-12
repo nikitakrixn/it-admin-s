@@ -1,90 +1,55 @@
 <template>
-  <div>
-    <!-- Header -->
-    <div class="mb-8">
-      <NuxtLink to="/employees" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4 group">
-        <Icon name="ri:arrow-left-line" class="mr-1 group-hover:-translate-x-1 transition-transform" />
-        Назад к списку
+  <div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex items-center gap-4 mb-2">
+      <NuxtLink to="/employees" class="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <Icon name="ri:arrow-left-line" class="text-xl" />
       </NuxtLink>
-      <div class="flex items-center">
-        <div class="h-14 w-14 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mr-4 shadow-lg">
-          <Icon name="ri:user-add-line" class="text-white text-2xl" />
-        </div>
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">Добавить сотрудника</h1>
-          <p class="mt-1 text-sm text-gray-600">Заполните информацию о новом сотруднике</p>
-        </div>
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Добавить сотрудника</h1>
+        <p class="text-sm text-gray-600">Заполните информацию о новом сотруднике</p>
       </div>
     </div>
 
-    <!-- Form -->
-    <form @submit.prevent="handleSubmit" class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+    <form @submit.prevent="handleSubmit" class="card">
       <div class="p-6 space-y-8">
-        <!-- Personal Info -->
         <div>
-          <div class="flex items-center mb-5">
-            <div class="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
-              <Icon name="ri:user-line" class="text-blue-600 text-lg" />
+          <div class="flex items-center gap-3 mb-6">
+            <div class="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
+              <Icon name="ri:user-line" class="text-blue-600 text-xl" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900">Личная информация</h3>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label for="last_name" class="block text-sm font-medium text-gray-700">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
                 Фамилия <span class="text-red-500">*</span>
               </label>
-              <input
-                id="last_name"
-                v-model="form.last_name"
-                type="text"
-                required
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <input v-model="form.last_name" type="text" required class="input-field" />
             </div>
             <div>
-              <label for="first_name" class="block text-sm font-medium text-gray-700">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
                 Имя <span class="text-red-500">*</span>
               </label>
-              <input
-                id="first_name"
-                v-model="form.first_name"
-                type="text"
-                required
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <input v-model="form.first_name" type="text" required class="input-field" />
             </div>
             <div>
-              <label for="middle_name" class="block text-sm font-medium text-gray-700">
-                Отчество
-              </label>
-              <input
-                id="middle_name"
-                v-model="form.middle_name"
-                type="text"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-2">Отчество</label>
+              <input v-model="form.middle_name" type="text" class="input-field" />
             </div>
           </div>
         </div>
 
-        <!-- Work Info -->
-        <div class="pt-6 border-t border-gray-200">
-          <div class="flex items-center mb-5">
-            <div class="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center mr-3">
-              <Icon name="ri:briefcase-line" class="text-purple-600 text-lg" />
+        <div class="border-t border-gray-200 pt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="h-12 w-12 rounded-xl bg-purple-100 flex items-center justify-center">
+              <Icon name="ri:briefcase-line" class="text-purple-600 text-xl" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900">Рабочая информация</h3>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label for="department_id" class="block text-sm font-medium text-gray-700">
-                Отдел
-              </label>
-              <select
-                id="department_id"
-                v-model="form.department_id"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              >
+              <label class="block text-sm font-medium text-gray-700 mb-2">Отдел</label>
+              <select v-model="form.department_id" class="input-field">
                 <option :value="undefined">Не выбрано</option>
                 <option v-for="dept in departments" :key="dept.id" :value="dept.id">
                   {{ dept.name }}
@@ -92,14 +57,8 @@
               </select>
             </div>
             <div>
-              <label for="position_id" class="block text-sm font-medium text-gray-700">
-                Должность
-              </label>
-              <select
-                id="position_id"
-                v-model="form.position_id"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              >
+              <label class="block text-sm font-medium text-gray-700 mb-2">Должность</label>
+              <select v-model="form.position_id" class="input-field">
                 <option :value="undefined">Не выбрано</option>
                 <option v-for="pos in positions" :key="pos.id" :value="pos.id">
                   {{ pos.name }}
@@ -107,26 +66,14 @@
               </select>
             </div>
             <div>
-              <label for="hire_date" class="block text-sm font-medium text-gray-700">
-                Дата приёма
-              </label>
-              <input
-                id="hire_date"
-                v-model="form.hire_date"
-                type="date"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-2">Дата приёма</label>
+              <input v-model="form.hire_date" type="date" class="input-field" />
             </div>
             <div>
-              <label for="status" class="block text-sm font-medium text-gray-700">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
                 Статус <span class="text-red-500">*</span>
               </label>
-              <select
-                id="status"
-                v-model="form.status"
-                required
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              >
+              <select v-model="form.status" required class="input-field">
                 <option value="active">Активен</option>
                 <option value="inactive">Неактивен</option>
                 <option value="terminated">Уволен</option>
@@ -135,100 +82,56 @@
           </div>
         </div>
 
-        <!-- Contact Info -->
-        <div class="pt-6 border-t border-gray-200">
-          <div class="flex items-center mb-5">
-            <div class="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center mr-3">
-              <Icon name="ri:contacts-line" class="text-green-600 text-lg" />
+        <div class="border-t border-gray-200 pt-8">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center">
+              <Icon name="ri:contacts-line" class="text-green-600 text-xl" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900">Контактная информация</h3>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label for="email" class="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                id="email"
-                v-model="form.email"
-                type="email"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input v-model="form.email" type="email" class="input-field" />
             </div>
             <div>
-              <label for="phone" class="block text-sm font-medium text-gray-700">
-                Телефон
-              </label>
-              <input
-                id="phone"
-                v-model="form.phone"
-                type="tel"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+              <input v-model="form.phone" type="tel" class="input-field" />
             </div>
             <div>
-              <label for="ad_username" class="block text-sm font-medium text-gray-700">
-                AD Username
-              </label>
-              <input
-                id="ad_username"
-                v-model="form.ad_username"
-                type="text"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-2">AD Username</label>
+              <input v-model="form.ad_username" type="text" class="input-field" />
             </div>
           </div>
         </div>
 
-        <!-- Notes -->
-        <div class="pt-6 border-t border-gray-200">
-          <div class="flex items-center mb-3">
-            <Icon name="ri:file-text-line" class="text-gray-400 mr-2" />
-            <label for="notes" class="block text-sm font-medium text-gray-700">
-              Примечания
-            </label>
+        <div class="border-t border-gray-200 pt-8">
+          <div class="flex items-center gap-2 mb-3">
+            <Icon name="ri:file-text-line" class="text-gray-400 text-xl" />
+            <label class="block text-sm font-medium text-gray-700">Примечания</label>
           </div>
-          <textarea
-            id="notes"
-            v-model="form.notes"
-            rows="3"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-          ></textarea>
+          <textarea v-model="form.notes" rows="4" class="input-field"></textarea>
         </div>
 
-        <!-- Error Message -->
-        <div v-if="errorMessage" class="rounded-md bg-red-50 p-4">
-          <div class="flex">
-            <Icon name="ri:error-warning-line" class="h-5 w-5 text-red-400" />
-            <div class="ml-3">
-              <p class="text-sm font-medium text-red-800">{{ errorMessage }}</p>
-            </div>
-          </div>
+        <div v-if="errorMessage" class="p-4 rounded-lg bg-red-50 text-red-800 text-sm flex items-start gap-2">
+          <Icon name="ri:error-warning-line" class="text-lg flex-shrink-0 mt-0.5" />
+          <span>{{ errorMessage }}</span>
         </div>
       </div>
 
-      <!-- Actions -->
-      <div class="bg-gradient-to-r from-gray-50 to-white px-6 py-5 flex items-center justify-between border-t border-gray-200">
+      <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
         <p class="text-sm text-gray-500">
-          <Icon name="ri:information-line" class="inline mr-1" />
-          Поля отмеченные <span class="text-red-500">*</span> обязательны для заполнения
+          <span class="text-red-500">*</span> Обязательные поля
         </p>
-        <div class="flex items-center space-x-3">
-          <NuxtLink
-            to="/employees"
-            class="inline-flex items-center px-5 py-2.5 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all"
-          >
+        <div class="flex gap-3">
+          <NuxtLink to="/employees" class="btn btn-secondary">
             <Icon name="ri:close-line" class="mr-2" />
             Отмена
           </NuxtLink>
-          <button
-            type="submit"
-            :disabled="loading"
-            class="inline-flex items-center px-5 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
+          <button type="submit" :disabled="loading" class="btn btn-primary">
             <Icon v-if="loading" name="ri:loader-4-line" class="mr-2 animate-spin" />
             <Icon v-else name="ri:save-line" class="mr-2" />
-            {{ loading ? 'Сохранение...' : 'Сохранить сотрудника' }}
+            {{ loading ? 'Сохранение...' : 'Сохранить' }}
           </button>
         </div>
       </div>
@@ -238,7 +141,11 @@
 
 <script setup lang="ts">
 definePageMeta({
-  middleware: 'auth'
+  middleware: 'auth',
+  pageTransition: {
+    name: 'slide-up',
+    mode: 'out-in'
+  }
 })
 
 useHead({
@@ -291,6 +198,10 @@ const handleSubmit = async () => {
     if (form.value.notes) data.notes = form.value.notes
 
     await createEmployee(data)
+    
+    const toast = useToast()
+    toast.success('Сотрудник успешно создан')
+    
     await navigateTo('/employees')
   } catch (err: any) {
     errorMessage.value = err.message || 'Ошибка при создании сотрудника'
