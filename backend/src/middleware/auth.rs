@@ -1,7 +1,4 @@
-use poem::{
-    http::StatusCode,
-    Endpoint, Error, Middleware, Request, Result,
-};
+use poem::{Endpoint, Error, Middleware, Request, Result, http::StatusCode};
 use std::sync::Arc;
 
 use crate::services::auth_service::{AuthService, Claims};
@@ -43,10 +40,7 @@ impl<E: Endpoint> Endpoint for AuthMiddlewareImpl<E> {
             .get("authorization")
             .and_then(|h| h.to_str().ok())
             .ok_or_else(|| {
-                Error::from_string(
-                    "Missing authorization header",
-                    StatusCode::UNAUTHORIZED,
-                )
+                Error::from_string("Missing authorization header", StatusCode::UNAUTHORIZED)
             })?;
 
         // Проверить формат "Bearer <token>"
@@ -60,15 +54,9 @@ impl<E: Endpoint> Endpoint for AuthMiddlewareImpl<E> {
         let token = &auth_header[7..]; // Убрать "Bearer "
 
         // Валидировать токен
-        let claims = self
-            .auth_service
-            .verify_token(token)
-            .map_err(|_| {
-                Error::from_string(
-                    "Invalid or expired token",
-                    StatusCode::UNAUTHORIZED,
-                )
-            })?;
+        let claims = self.auth_service.verify_token(token).map_err(|_| {
+            Error::from_string("Invalid or expired token", StatusCode::UNAUTHORIZED)
+        })?;
 
         // Сохранить claims в extensions для использования в handlers
         req.extensions_mut().insert(claims);

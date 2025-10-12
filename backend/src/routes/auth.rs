@@ -1,4 +1,4 @@
-use poem_openapi::{param::Header, payload::Json, ApiResponse, Object, OpenApi};
+use poem_openapi::{ApiResponse, Object, OpenApi, param::Header, payload::Json};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -14,10 +14,10 @@ use crate::services::auth_service::AuthService;
 pub struct RegisterRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
-    
+
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     pub password: String,
-    
+
     #[validate(length(min = 2, message = "Name must be at least 2 characters"))]
     pub name: String,
 }
@@ -26,7 +26,7 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
-    
+
     #[validate(length(min = 1, message = "Password is required"))]
     pub password: String,
 }
@@ -52,11 +52,11 @@ pub enum RegisterResponse {
     /// User successfully registered
     #[oai(status = 201)]
     Created(Json<AuthResponse>),
-    
+
     /// Bad request (validation error)
     #[oai(status = 400)]
     BadRequest(Json<ErrorResponse>),
-    
+
     /// User already exists
     #[oai(status = 409)]
     Conflict(Json<ErrorResponse>),
@@ -67,11 +67,11 @@ pub enum LoginResponse {
     /// Successfully authenticated
     #[oai(status = 200)]
     Ok(Json<AuthResponse>),
-    
+
     /// Invalid credentials
     #[oai(status = 401)]
     Unauthorized(Json<ErrorResponse>),
-    
+
     /// Bad request (validation error)
     #[oai(status = 400)]
     BadRequest(Json<ErrorResponse>),
@@ -82,7 +82,7 @@ pub enum MeResponse {
     /// Current user info
     #[oai(status = 200)]
     Ok(Json<UserResponse>),
-    
+
     /// Unauthorized
     #[oai(status = 401)]
     Unauthorized(Json<ErrorResponse>),
@@ -119,11 +119,10 @@ impl AuthApi {
         }
 
         // Регистрация пользователя
-        match self.auth_service.register_user(
-            req.0.email,
-            req.0.password,
-            Some("user".to_string()),
-        ) {
+        match self
+            .auth_service
+            .register_user(req.0.email, req.0.password, Some("user".to_string()))
+        {
             Ok(user) => {
                 // Генерация токена
                 match self.auth_service.generate_token(&user) {
@@ -189,14 +188,12 @@ impl AuthApi {
     async fn me(&self, authorization: Header<Option<String>>) -> MeResponse {
         // Проверить наличие токена
         let token = match authorization.0 {
-            Some(ref auth_header) if auth_header.starts_with("Bearer ") => {
-                &auth_header[7..]
-            }
+            Some(ref auth_header) if auth_header.starts_with("Bearer ") => &auth_header[7..],
             _ => {
                 return MeResponse::Unauthorized(Json(ErrorResponse {
                     error: "unauthorized".to_string(),
                     message: "Missing or invalid authorization header".to_string(),
-                }))
+                }));
             }
         };
 
@@ -207,7 +204,7 @@ impl AuthApi {
                 return MeResponse::Unauthorized(Json(ErrorResponse {
                     error: "unauthorized".to_string(),
                     message: "Invalid or expired token".to_string(),
-                }))
+                }));
             }
         };
 
@@ -218,7 +215,7 @@ impl AuthApi {
                 return MeResponse::Unauthorized(Json(ErrorResponse {
                     error: "invalid_token".to_string(),
                     message: "Invalid user ID in token".to_string(),
-                }))
+                }));
             }
         };
 

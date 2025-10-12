@@ -1,10 +1,10 @@
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -14,11 +14,11 @@ use crate::models::user::{NewUser, User};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,  // user id
+    pub sub: String, // user id
     pub email: String,
     pub role: String,
-    pub exp: i64,     // expiration time
-    pub iat: i64,     // issued at
+    pub exp: i64, // expiration time
+    pub iat: i64, // issued at
 }
 
 pub struct AuthService {
@@ -40,17 +40,24 @@ impl AuthService {
     pub fn hash_password(&self, password: &str) -> Result<String, Box<dyn std::error::Error>> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        let password_hash = argon2.hash_password(password.as_bytes(), &salt)
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
             .map_err(|e| format!("Password hashing failed: {}", e))?;
         Ok(password_hash.to_string())
     }
 
     /// Проверка пароля
-    pub fn verify_password(&self, password: &str, hash: &str) -> Result<bool, Box<dyn std::error::Error>> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| format!("Invalid password hash: {}", e))?;
+    pub fn verify_password(
+        &self,
+        password: &str,
+        hash: &str,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let parsed_hash =
+            PasswordHash::new(hash).map_err(|e| format!("Invalid password hash: {}", e))?;
         let argon2 = Argon2::default();
-        Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+        Ok(argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok())
     }
 
     /// Генерация JWT токена
@@ -160,14 +167,15 @@ impl AuthService {
     /// Получить пользователя по ID
     pub fn get_user_by_id(&self, user_id: Uuid) -> Result<User, Box<dyn std::error::Error>> {
         let mut conn = self.db_pool.get()?;
-        let user = users::table
-            .find(user_id)
-            .first::<User>(&mut conn)?;
+        let user = users::table.find(user_id).first::<User>(&mut conn)?;
         Ok(user)
     }
 
     /// Получить пользователя по email
-    pub fn get_user_by_email(&self, email: &str) -> Result<Option<User>, Box<dyn std::error::Error>> {
+    pub fn get_user_by_email(
+        &self,
+        email: &str,
+    ) -> Result<Option<User>, Box<dyn std::error::Error>> {
         let mut conn = self.db_pool.get()?;
         let user = users::table
             .filter(users::email.eq(email))

@@ -23,7 +23,7 @@ impl ActivityLogService {
         entity_id: i32,
     ) -> Result<(), diesel::result::Error> {
         let new_log = NewActivityLog::new(user_id, action, entity_type, entity_id);
-        
+
         let mut conn = self.db_pool.get().map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager
@@ -45,9 +45,9 @@ impl ActivityLogService {
         entity_id: i32,
         details: serde_json::Value,
     ) -> Result<(), diesel::result::Error> {
-        let new_log = NewActivityLog::new(user_id, action, entity_type, entity_id)
-            .with_details(details);
-        
+        let new_log =
+            NewActivityLog::new(user_id, action, entity_type, entity_id).with_details(details);
+
         let mut conn = self.db_pool.get().map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager
@@ -72,19 +72,19 @@ impl ActivityLogService {
         user_agent: Option<String>,
     ) -> Result<(), diesel::result::Error> {
         let mut new_log = NewActivityLog::new(user_id, action, entity_type, entity_id);
-        
+
         if let Some(d) = details {
             new_log = new_log.with_details(d);
         }
-        
+
         if let Some(ip) = ip_address {
             new_log = new_log.with_ip(ip);
         }
-        
+
         if let Some(ua) = user_agent {
             new_log = new_log.with_user_agent(ua);
         }
-        
+
         let mut conn = self.db_pool.get().map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager

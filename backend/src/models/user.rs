@@ -1,7 +1,7 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::NaiveDateTime;
 
 // Модель для чтения из БД
 #[derive(Queryable, Selectable, Serialize, Clone, Debug)]

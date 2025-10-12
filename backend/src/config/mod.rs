@@ -118,10 +118,7 @@ impl Config {
             Some(MikrotikConfig {
                 enabled: true,
                 host: env::var("MIKROTIK_HOST").ok()?,
-                port: env::var("MIKROTIK_PORT")
-                    .ok()?
-                    .parse()
-                    .ok()?,
+                port: env::var("MIKROTIK_PORT").ok()?.parse().ok()?,
                 user: env::var("MIKROTIK_USER").ok()?,
                 password: env::var("MIKROTIK_PASSWORD").ok()?,
             })

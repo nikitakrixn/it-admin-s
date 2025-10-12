@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use poem_openapi::{param::Query, payload::Json, ApiResponse, Object, OpenApi};
+use poem_openapi::{ApiResponse, Object, OpenApi, param::Query, payload::Json};
 use serde::Serialize;
 
 use crate::config::database::Pool;
@@ -70,7 +70,7 @@ impl ActivityLogApi {
                 return ActivityLogsListResponse::InternalError(Json(ErrorResponse {
                     error: "database_error".to_string(),
                     message: format!("Failed to get database connection: {}", e),
-                }))
+                }));
             }
         };
 
@@ -98,7 +98,7 @@ impl ActivityLogApi {
                 return ActivityLogsListResponse::InternalError(Json(ErrorResponse {
                     error: "database_error".to_string(),
                     message: format!("Failed to count activity logs: {}", e),
-                }))
+                }));
             }
         };
 
@@ -131,15 +131,12 @@ impl ActivityLogApi {
                 return ActivityLogsListResponse::InternalError(Json(ErrorResponse {
                     error: "database_error".to_string(),
                     message: format!("Failed to load activity logs: {}", e),
-                }))
+                }));
             }
         };
 
         // Get user emails for logs that have user_id
-        let user_ids: Vec<uuid::Uuid> = logs
-            .iter()
-            .filter_map(|log| log.user_id)
-            .collect();
+        let user_ids: Vec<uuid::Uuid> = logs.iter().filter_map(|log| log.user_id).collect();
 
         let user_emails: std::collections::HashMap<uuid::Uuid, String> = if !user_ids.is_empty() {
             users::table

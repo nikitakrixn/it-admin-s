@@ -1,15 +1,15 @@
 mod config;
+mod integrations;
 mod middleware;
 mod models;
 mod routes;
 mod services;
 mod utils;
-mod integrations;
 
 use poem::{
+    EndpointExt, Route, Server,
     listener::TcpListener,
     middleware::{Cors, Tracing},
-    EndpointExt, Route, Server,
 };
 use poem_openapi::OpenApiService;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -31,20 +31,26 @@ async fn main() -> Result<(), std::io::Error> {
     // Load configuration
     let config = config::Config::from_env().expect("Failed to load configuration");
 
-    tracing::info!("Starting {} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    tracing::info!(
+        "Starting {} v{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
     tracing::info!("Environment: {}", config.app.env);
 
     // Initialize database connection pool
-    let db_pool = config::database::create_pool(&config.database)
-        .expect("Failed to create database pool");
+    let db_pool =
+        config::database::create_pool(&config.database).expect("Failed to create database pool");
 
     // Run migrations
     tracing::info!("Running database migrations...");
     {
-        use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+        use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
         const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
-        
-        let mut conn = db_pool.get().expect("Failed to get DB connection for migrations");
+
+        let mut conn = db_pool
+            .get()
+            .expect("Failed to get DB connection for migrations");
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
         tracing::info!("Database migrations completed successfully");
@@ -68,7 +74,10 @@ async fn main() -> Result<(), std::io::Error> {
         &config.app.name,
         env!("CARGO_PKG_VERSION"),
     )
-    .server(format!("http://{}:{}/api", config.app.host, config.app.port));
+    .server(format!(
+        "http://{}:{}/api",
+        config.app.host, config.app.port
+    ));
 
     // Create Swagger UI
     let ui = api_service.swagger_ui();
@@ -80,11 +89,12 @@ async fn main() -> Result<(), std::io::Error> {
         .nest("/docs", ui)
         .nest("/api-spec", spec)
         .at("/health", poem::endpoint::make_sync(|_| "OK"))
-        .with(Cors::new()
-            .allow_origin("http://localhost:3000")
-            .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
-            .allow_credentials(true)
-            .max_age(3600)
+        .with(
+            Cors::new()
+                .allow_origin("http://localhost:3000")
+                .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
+                .allow_credentials(true)
+                .max_age(3600),
         )
         .with(Tracing);
 
@@ -93,7 +103,5 @@ async fn main() -> Result<(), std::io::Error> {
     tracing::info!("Server listening on http://{}", addr);
     tracing::info!("API documentation available at http://{}/docs", addr);
 
-    Server::new(TcpListener::bind(&addr))
-        .run(app)
-        .await
+    Server::new(TcpListener::bind(&addr)).run(app).await
 }

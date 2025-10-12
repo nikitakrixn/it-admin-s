@@ -1,6 +1,6 @@
-use poem_openapi::{payload::Json, OpenApi};
-use serde::{Deserialize, Serialize};
 use crate::config::database::Pool;
+use poem_openapi::{OpenApi, payload::Json};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, poem_openapi::Object)]
 pub struct HealthResponse {
