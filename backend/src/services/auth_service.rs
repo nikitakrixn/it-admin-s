@@ -4,6 +4,7 @@ use argon2::{
 };
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -92,18 +93,18 @@ impl AuthService {
     }
 
     /// Регистрация нового пользователя
-    pub fn register_user(
+    pub async fn register_user(
         &self,
         email: String,
         password: String,
         role: Option<String>,
     ) -> Result<User, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get()?;
+        let mut conn = self.db_pool.get().await?;
 
         // Проверка существования пользователя
         let existing_user = users::table
             .filter(users::email.eq(&email))
-            .first::<User>(&mut conn)
+            .first::<User>(&mut conn).await
             .optional()?;
 
         if existing_user.is_some() {
@@ -123,23 +124,23 @@ impl AuthService {
 
         let user = diesel::insert_into(users::table)
             .values(&new_user)
-            .get_result::<User>(&mut conn)?;
+            .get_result::<User>(&mut conn).await?;
 
         Ok(user)
     }
 
     /// Аутентификация пользователя
-    pub fn authenticate(
+    pub async fn authenticate(
         &self,
         email: String,
         password: String,
     ) -> Result<(User, String), Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get()?;
+        let mut conn = self.db_pool.get().await?;
 
         // Поиск пользователя
         let user = users::table
             .filter(users::email.eq(&email))
-            .first::<User>(&mut conn)
+            .first::<User>(&mut conn).await
             .optional()?
             .ok_or("Invalid email or password")?;
 
@@ -156,7 +157,7 @@ impl AuthService {
         // Обновление времени последнего входа
         diesel::update(users::table.find(user.id))
             .set(users::last_login_at.eq(Some(Utc::now().naive_utc())))
-            .execute(&mut conn)?;
+            .execute(&mut conn).await?;
 
         // Генерация токена
         let token = self.generate_token(&user)?;
@@ -165,21 +166,21 @@ impl AuthService {
     }
 
     /// Получить пользователя по ID
-    pub fn get_user_by_id(&self, user_id: Uuid) -> Result<User, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get()?;
-        let user = users::table.find(user_id).first::<User>(&mut conn)?;
+    pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<User, Box<dyn std::error::Error>> {
+        let mut conn = self.db_pool.get().await?;
+        let user = users::table.find(user_id).first::<User>(&mut conn).await?;
         Ok(user)
     }
 
     /// Получить пользователя по email
-    pub fn get_user_by_email(
+    pub async fn get_user_by_email(
         &self,
         email: &str,
     ) -> Result<Option<User>, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get()?;
+        let mut conn = self.db_pool.get().await?;
         let user = users::table
             .filter(users::email.eq(email))
-            .first::<User>(&mut conn)
+            .first::<User>(&mut conn).await
             .optional()?;
         Ok(user)
     }

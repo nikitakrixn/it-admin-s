@@ -122,6 +122,7 @@ impl AuthApi {
         match self
             .auth_service
             .register_user(req.0.email, req.0.password, Some("user".to_string()))
+            .await
         {
             Ok(user) => {
                 // Генерация токена
@@ -168,7 +169,7 @@ impl AuthApi {
         }
 
         // Аутентификация
-        match self.auth_service.authenticate(req.0.email, req.0.password) {
+        match self.auth_service.authenticate(req.0.email, req.0.password).await {
             Ok((user, token)) => LoginResponse::Ok(Json(AuthResponse {
                 token,
                 user: user.into(),
@@ -219,7 +220,7 @@ impl AuthApi {
             }
         };
 
-        match self.auth_service.get_user_by_id(user_id) {
+        match self.auth_service.get_user_by_id(user_id).await {
             Ok(user) => MeResponse::Ok(Json(user.into())),
             Err(_) => MeResponse::Unauthorized(Json(ErrorResponse {
                 error: "user_not_found".to_string(),

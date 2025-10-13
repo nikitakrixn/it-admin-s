@@ -1,4 +1,4 @@
-use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::config::database::Pool;
@@ -15,7 +15,7 @@ impl ActivityLogService {
     }
 
     /// Log an activity with minimal information
-    pub fn log(
+    pub async fn log(
         &self,
         user_id: Option<Uuid>,
         action: impl Into<String>,
@@ -24,20 +24,20 @@ impl ActivityLogService {
     ) -> Result<(), diesel::result::Error> {
         let new_log = NewActivityLog::new(user_id, action, entity_type, entity_id);
 
-        let mut conn = self.db_pool.get().map_err(|e| {
+        let mut conn = self.db_pool.get().await.map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager
         })?;
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn)?;
+            .execute(&mut conn).await?;
 
         Ok(())
     }
 
     /// Log an activity with details (JSONB)
-    pub fn log_with_details(
+    pub async fn log_with_details(
         &self,
         user_id: Option<Uuid>,
         action: impl Into<String>,
@@ -48,20 +48,20 @@ impl ActivityLogService {
         let new_log =
             NewActivityLog::new(user_id, action, entity_type, entity_id).with_details(details);
 
-        let mut conn = self.db_pool.get().map_err(|e| {
+        let mut conn = self.db_pool.get().await.map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager
         })?;
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn)?;
+            .execute(&mut conn).await?;
 
         Ok(())
     }
 
     /// Log an activity with full context (IP, user agent, details)
-    pub fn log_full(
+    pub async fn log_full(
         &self,
         user_id: Option<Uuid>,
         action: impl Into<String>,
@@ -85,14 +85,14 @@ impl ActivityLogService {
             new_log = new_log.with_user_agent(ua);
         }
 
-        let mut conn = self.db_pool.get().map_err(|e| {
+        let mut conn = self.db_pool.get().await.map_err(|e| {
             tracing::error!("Failed to get DB connection for activity log: {}", e);
             diesel::result::Error::BrokenTransactionManager
         })?;
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn)?;
+            .execute(&mut conn).await?;
 
         Ok(())
     }
@@ -101,26 +101,40 @@ impl ActivityLogService {
     pub fn log_async(
         &self,
         user_id: Option<Uuid>,
-        action: impl Into<String>,
-        entity_type: impl Into<String>,
+        action: impl Into<String> + Send + 'static,
+        entity_type: impl Into<String> + Send + 'static,
         entity_id: i32,
     ) {
-        if let Err(e) = self.log(user_id, action, entity_type, entity_id) {
-            tracing::warn!("Failed to log activity: {}", e);
-        }
+        let pool = self.db_pool.clone();
+        let action = action.into();
+        let entity_type = entity_type.into();
+        
+        tokio::spawn(async move {
+            let service = ActivityLogService::new(pool);
+            if let Err(e) = service.log(user_id, action, entity_type, entity_id).await {
+                tracing::warn!("Failed to log activity: {}", e);
+            }
+        });
     }
 
     /// Log with details in background
     pub fn log_with_details_async(
         &self,
         user_id: Option<Uuid>,
-        action: impl Into<String>,
-        entity_type: impl Into<String>,
+        action: impl Into<String> + Send + 'static,
+        entity_type: impl Into<String> + Send + 'static,
         entity_id: i32,
         details: serde_json::Value,
     ) {
-        if let Err(e) = self.log_with_details(user_id, action, entity_type, entity_id, details) {
-            tracing::warn!("Failed to log activity with details: {}", e);
-        }
+        let pool = self.db_pool.clone();
+        let action = action.into();
+        let entity_type = entity_type.into();
+        
+        tokio::spawn(async move {
+            let service = ActivityLogService::new(pool);
+            if let Err(e) = service.log_with_details(user_id, action, entity_type, entity_id, details).await {
+                tracing::warn!("Failed to log activity with details: {}", e);
+            }
+        });
     }
 }

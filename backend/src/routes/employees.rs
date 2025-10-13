@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use poem_openapi::{ApiResponse, Object, OpenApi, param::Path, param::Query, payload::Json};
 use serde::{Deserialize, Serialize};
 
@@ -205,7 +206,7 @@ impl EmployeesApi {
         let per_page = per_page.unwrap_or(20).min(100);
         let offset = (page - 1) * per_page;
 
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeesListResponse::InternalError(Json(ErrorResponse {
@@ -227,7 +228,7 @@ impl EmployeesApi {
         }
 
         // Get total count
-        let total = match count_query.count().get_result::<i64>(&mut conn) {
+        let total = match count_query.count().get_result::<i64>(&mut conn).await {
             Ok(count) => count,
             Err(e) => {
                 return EmployeesListResponse::InternalError(Json(ErrorResponse {
@@ -262,6 +263,7 @@ impl EmployeesApi {
             .limit(per_page)
             .offset(offset)
             .load::<(Employee, Option<String>, Option<String>)>(&mut conn)
+            .await
         {
             Ok(results) => results,
             Err(e) => {
@@ -288,7 +290,7 @@ impl EmployeesApi {
     /// Get employee by ID
     #[oai(path = "/:id", method = "get")]
     async fn get_employee(&self, Path(id): Path<i32>) -> EmployeeDetailResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeDetailResponse::InternalError(Json(ErrorResponse {
@@ -307,13 +309,14 @@ impl EmployeesApi {
                 positions::name.nullable(),
                 departments::name.nullable(),
             ))
-            .first::<(Employee, Option<String>, Option<String>)>(&mut conn);
+            .first::<(Employee, Option<String>, Option<String>)>(&mut conn)
+            .await;
 
         match result {
             Ok((employee, pos_name, dept_name)) => EmployeeDetailResponse::Ok(Json(
                 Self::employee_to_response(employee, pos_name, dept_name),
             )),
-            Err(diesel::NotFound) => EmployeeDetailResponse::NotFound(Json(ErrorResponse {
+            Err(diesel::result::Error::NotFound) => EmployeeDetailResponse::NotFound(Json(ErrorResponse {
                 error: "not_found".to_string(),
                 message: format!("Employee with id {} not found", id),
             })),
@@ -336,7 +339,7 @@ impl EmployeesApi {
                 }));
             }
         };
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeCreateResponse::InternalError(Json(ErrorResponse {
@@ -348,7 +351,7 @@ impl EmployeesApi {
 
         let result = diesel::insert_into(employees::table)
             .values(&new_employee)
-            .get_result::<Employee>(&mut conn);
+            .get_result::<Employee>(&mut conn).await;
 
         match result {
             Ok(employee) => {
@@ -370,20 +373,24 @@ impl EmployeesApi {
                 // Get position and department names
                 let (pos_name, dept_name) =
                     if employee.position_id.is_some() || employee.department_id.is_some() {
-                        let pos = employee.position_id.and_then(|pid| {
+                        let pos = if let Some(pid) = employee.position_id {
                             positions::table
                                 .find(pid)
                                 .select(positions::name)
-                                .first::<String>(&mut conn)
+                                .first::<String>(&mut conn).await
                                 .ok()
-                        });
-                        let dept = employee.department_id.and_then(|did| {
+                        } else {
+                            None
+                        };
+                        let dept = if let Some(did) = employee.department_id {
                             departments::table
                                 .find(did)
                                 .select(departments::name)
-                                .first::<String>(&mut conn)
+                                .first::<String>(&mut conn).await
                                 .ok()
-                        });
+                        } else {
+                            None
+                        };
                         (pos, dept)
                     } else {
                         (None, None)
@@ -407,7 +414,7 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
@@ -418,9 +425,9 @@ impl EmployeesApi {
         };
 
         // Get old values before update
-        let old_employee = match employees::table.find(id).first::<Employee>(&mut conn) {
+        let old_employee = match employees::table.find(id).first::<Employee>(&mut conn).await {
             Ok(emp) => emp,
-            Err(diesel::NotFound) => {
+            Err(diesel::result::Error::NotFound) => {
                 return EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
                     error: "not_found".to_string(),
                     message: format!("Employee with id {} not found", id),
@@ -447,7 +454,7 @@ impl EmployeesApi {
 
         let result = diesel::update(employees::table.find(id))
             .set(&update_data)
-            .get_result::<Employee>(&mut conn);
+            .get_result::<Employee>(&mut conn).await;
 
         match result {
             Ok(employee) => {
@@ -579,20 +586,24 @@ impl EmployeesApi {
 
                 let (pos_name, dept_name) =
                     if employee.position_id.is_some() || employee.department_id.is_some() {
-                        let pos = employee.position_id.and_then(|pid| {
+                        let pos = if let Some(pid) = employee.position_id {
                             positions::table
                                 .find(pid)
                                 .select(positions::name)
-                                .first::<String>(&mut conn)
+                                .first::<String>(&mut conn).await
                                 .ok()
-                        });
-                        let dept = employee.department_id.and_then(|did| {
+                        } else {
+                            None
+                        };
+                        let dept = if let Some(did) = employee.department_id {
                             departments::table
                                 .find(did)
                                 .select(departments::name)
-                                .first::<String>(&mut conn)
+                                .first::<String>(&mut conn).await
                                 .ok()
-                        });
+                        } else {
+                            None
+                        };
                         (pos, dept)
                     } else {
                         (None, None)
@@ -602,7 +613,7 @@ impl EmployeesApi {
                     employee, pos_name, dept_name,
                 )))
             }
-            Err(diesel::NotFound) => EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
+            Err(diesel::result::Error::NotFound) => EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
                 error: "not_found".to_string(),
                 message: format!("Employee with id {} not found", id),
             })),
@@ -619,7 +630,7 @@ impl EmployeesApi {
     /// Delete employee
     #[oai(path = "/:id", method = "delete")]
     async fn delete_employee(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
@@ -654,9 +665,10 @@ impl EmployeesApi {
                 Option<String>,
                 Option<String>,
             )>(&mut conn)
+            .await
             .ok();
 
-        let result = diesel::delete(employees::table.find(id)).execute(&mut conn);
+        let result = diesel::delete(employees::table.find(id)).execute(&mut conn).await;
 
         match result {
             Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
@@ -715,7 +727,7 @@ impl EmployeesApi {
             }));
         }
 
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return BulkDeleteEmployeesResponse::InternalError(Json(ErrorResponse {
@@ -729,7 +741,7 @@ impl EmployeesApi {
         let mut failed_ids = Vec::new();
 
         for id in req.ids {
-            match diesel::delete(employees::table.find(id)).execute(&mut conn) {
+            match diesel::delete(employees::table.find(id)).execute(&mut conn).await {
                 Ok(count) if count > 0 => {
                     deleted_count += 1;
                     // Log activity
@@ -749,7 +761,7 @@ impl EmployeesApi {
     /// Get all departments
     #[oai(path = "/departments", method = "get")]
     async fn list_departments(&self) -> DepartmentsListResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return DepartmentsListResponse::InternalError(Json(ErrorResponse {
@@ -761,7 +773,7 @@ impl EmployeesApi {
 
         let query = "SELECT * FROM v_departments_with_counts ORDER BY name";
 
-        match diesel::sql_query(query).load::<DepartmentWithCounts>(&mut conn) {
+        match diesel::sql_query(query).load::<DepartmentWithCounts>(&mut conn).await {
             Ok(depts) => {
                 let responses: Vec<DepartmentResponse> = depts
                     .into_iter()
@@ -791,7 +803,7 @@ impl EmployeesApi {
         &self,
         Json(new_dept): Json<NewDepartment>,
     ) -> DepartmentDetailResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return DepartmentDetailResponse::InternalError(Json(ErrorResponse {
@@ -803,7 +815,7 @@ impl EmployeesApi {
 
         match diesel::insert_into(departments::table)
             .values(&new_dept)
-            .get_result::<Department>(&mut conn)
+            .get_result::<Department>(&mut conn).await
         {
             Ok(dept) => {
                 // Log activity
@@ -843,7 +855,7 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(update_data): Json<UpdateDepartment>,
     ) -> DepartmentDetailResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return DepartmentDetailResponse::InternalError(Json(ErrorResponse {
@@ -854,9 +866,9 @@ impl EmployeesApi {
         };
 
         // Проверяем существование
-        let old_dept = match departments::table.find(id).first::<Department>(&mut conn) {
+        let old_dept = match departments::table.find(id).first::<Department>(&mut conn).await {
             Ok(dept) => dept,
-            Err(diesel::NotFound) => {
+            Err(diesel::result::Error::NotFound) => {
                 return DepartmentDetailResponse::NotFound(Json(ErrorResponse {
                     error: "not_found".to_string(),
                     message: format!("Department with id {} not found", id),
@@ -872,7 +884,7 @@ impl EmployeesApi {
 
         match diesel::update(departments::table.find(id))
             .set(&update_data)
-            .get_result::<Department>(&mut conn)
+            .get_result::<Department>(&mut conn).await
         {
             Ok(dept) => {
                 // Log changes
@@ -916,13 +928,13 @@ impl EmployeesApi {
                     .filter(employees::department_id.eq(dept.id))
                     .filter(employees::status.eq("active"))
                     .count()
-                    .get_result::<i64>(&mut conn)
+                    .get_result::<i64>(&mut conn).await
                     .unwrap_or(0);
 
                 let position_count = positions::table
                     .filter(positions::department_id.eq(dept.id))
                     .count()
-                    .get_result::<i64>(&mut conn)
+                    .get_result::<i64>(&mut conn).await
                     .unwrap_or(0);
 
                 DepartmentDetailResponse::Ok(Json(DepartmentResponse {
@@ -945,7 +957,7 @@ impl EmployeesApi {
     /// Delete department
     #[oai(path = "/departments/:id", method = "delete")]
     async fn delete_department(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
@@ -959,10 +971,10 @@ impl EmployeesApi {
         let dept_name = departments::table
             .find(id)
             .select(departments::name)
-            .first::<String>(&mut conn)
+            .first::<String>(&mut conn).await
             .ok();
 
-        let result = diesel::delete(departments::table.find(id)).execute(&mut conn);
+        let result = diesel::delete(departments::table.find(id)).execute(&mut conn).await;
 
         match result {
             Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
@@ -993,7 +1005,7 @@ impl EmployeesApi {
     /// Create new position
     #[oai(path = "/positions", method = "post")]
     async fn create_position(&self, Json(new_pos): Json<NewPosition>) -> PositionDetailResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return PositionDetailResponse::InternalError(Json(ErrorResponse {
@@ -1007,7 +1019,7 @@ impl EmployeesApi {
             let exists = departments::table
                 .find(dept_id)
                 .select(diesel::dsl::count(departments::id))
-                .first::<i64>(&mut conn)
+                .first::<i64>(&mut conn).await
                 .unwrap_or(0)
                 > 0;
 
@@ -1021,7 +1033,7 @@ impl EmployeesApi {
 
         match diesel::insert_into(positions::table)
             .values(&new_pos)
-            .get_result::<Position>(&mut conn)
+            .get_result::<Position>(&mut conn).await
         {
             Ok(pos) => {
                 // Log activity
@@ -1032,13 +1044,15 @@ impl EmployeesApi {
                 self.activity_log
                     .log_with_details_async(None, "created", "position", pos.id, details);
 
-                let department_name = pos.department_id.and_then(|dept_id| {
-                    departments::table
-                        .find(dept_id)
-                        .select(departments::name)
-                        .first::<String>(&mut conn)
-                        .ok()
-                });
+                let department_name = if let Some(dept_id) = pos.department_id {
+                            departments::table
+                                .find(dept_id)
+                                .select(departments::name)
+                                .first::<String>(&mut conn).await
+                                .ok()
+                        } else {
+                            None
+                        };
 
                 PositionDetailResponse::Created(Json(PositionResponse {
                     id: pos.id,
@@ -1064,7 +1078,7 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(update_data): Json<UpdatePosition>,
     ) -> PositionDetailResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return PositionDetailResponse::InternalError(Json(ErrorResponse {
@@ -1079,7 +1093,7 @@ impl EmployeesApi {
             let exists = departments::table
                 .find(dept_id)
                 .select(diesel::dsl::count(departments::id))
-                .first::<i64>(&mut conn)
+                .first::<i64>(&mut conn).await
                 .unwrap_or(0)
                 > 0;
 
@@ -1092,9 +1106,9 @@ impl EmployeesApi {
         }
 
         // Получаем старые данные
-        let old_pos = match positions::table.find(id).first::<Position>(&mut conn) {
+        let old_pos = match positions::table.find(id).first::<Position>(&mut conn).await {
             Ok(pos) => pos,
-            Err(diesel::NotFound) => {
+            Err(diesel::result::Error::NotFound) => {
                 return PositionDetailResponse::NotFound(Json(ErrorResponse {
                     error: "not_found".to_string(),
                     message: format!("Position with id {} not found", id),
@@ -1110,7 +1124,7 @@ impl EmployeesApi {
 
         match diesel::update(positions::table.find(id))
             .set(&update_data)
-            .get_result::<Position>(&mut conn)
+            .get_result::<Position>(&mut conn).await
         {
             Ok(pos) => {
                 // Log changes
@@ -1145,19 +1159,21 @@ impl EmployeesApi {
                         .log_with_details_async(None, "updated", "position", pos.id, details);
                 }
 
-                let department_name = pos.department_id.and_then(|dept_id| {
-                    departments::table
-                        .find(dept_id)
-                        .select(departments::name)
-                        .first::<String>(&mut conn)
-                        .ok()
-                });
+                let department_name = if let Some(dept_id) = pos.department_id {
+                            departments::table
+                                .find(dept_id)
+                                .select(departments::name)
+                                .first::<String>(&mut conn).await
+                                .ok()
+                        } else {
+                            None
+                        };
 
                 let employee_count = employees::table
                     .filter(employees::position_id.eq(pos.id))
                     .filter(employees::status.eq("active"))
                     .count()
-                    .get_result::<i64>(&mut conn)
+                    .get_result::<i64>(&mut conn).await
                     .unwrap_or(0);
 
                 PositionDetailResponse::Ok(Json(PositionResponse {
@@ -1180,7 +1196,7 @@ impl EmployeesApi {
     /// Delete position
     #[oai(path = "/positions/:id", method = "delete")]
     async fn delete_position(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
@@ -1194,10 +1210,10 @@ impl EmployeesApi {
         let pos_name = positions::table
             .find(id)
             .select(positions::name)
-            .first::<String>(&mut conn)
+            .first::<String>(&mut conn).await
             .ok();
 
-        let result = diesel::delete(positions::table.find(id)).execute(&mut conn);
+        let result = diesel::delete(positions::table.find(id)).execute(&mut conn).await;
 
         match result {
             Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
@@ -1223,7 +1239,7 @@ impl EmployeesApi {
     /// Get all positions with details
     #[oai(path = "/positions", method = "get")]
     async fn list_positions(&self) -> PositionsListResponse {
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return PositionsListResponse::InternalError(Json(ErrorResponse {
@@ -1235,7 +1251,7 @@ impl EmployeesApi {
 
         let query = "SELECT * FROM v_positions_with_details ORDER BY name";
 
-        match diesel::sql_query(query).load::<PositionWithDetails>(&mut conn) {
+        match diesel::sql_query(query).load::<PositionWithDetails>(&mut conn).await {
             Ok(positions) => {
                 let responses: Vec<PositionResponse> = positions
                     .into_iter()
@@ -1259,3 +1275,5 @@ impl EmployeesApi {
         }
     }
 }
+
+

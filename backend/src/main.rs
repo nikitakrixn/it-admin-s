@@ -52,23 +52,26 @@ async fn main() -> Result<(), std::io::Error> {
         }
     }
 
-    // Initialize database connection pool
-    let db_pool =
-        config::database::create_pool(&config.database).expect("Failed to create database pool");
-
-    // Run migrations
+    // Run migrations using sync pool
     tracing::info!("Running database migrations...");
     {
         use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
         const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-        let mut conn = db_pool
+        let sync_pool = config::database::create_sync_pool(&config.database)
+            .expect("Failed to create sync pool for migrations");
+        
+        let mut conn = sync_pool
             .get()
             .expect("Failed to get DB connection for migrations");
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
         tracing::info!("Database migrations completed successfully");
     }
+
+    // Initialize async database connection pool for main application
+    let db_pool = config::database::create_async_pool(&config.database)
+        .expect("Failed to create async database pool");
 
     // Create services
     let auth_service = services::auth_service::AuthService::new(

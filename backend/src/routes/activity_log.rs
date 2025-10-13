@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use poem_openapi::{ApiResponse, Object, OpenApi, param::Query, payload::Json};
 use serde::Serialize;
 
@@ -64,7 +65,7 @@ impl ActivityLogApi {
         let per_page = per_page.unwrap_or(50).min(200);
         let offset = (page - 1) * per_page;
 
-        let mut conn = match self.db_pool.get() {
+        let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
                 return ActivityLogsListResponse::InternalError(Json(ErrorResponse {
@@ -92,7 +93,7 @@ impl ActivityLogApi {
         }
 
         // Get total count
-        let total = match count_query.count().get_result::<i64>(&mut conn) {
+        let total = match count_query.count().get_result::<i64>(&mut conn).await {
             Ok(count) => count,
             Err(e) => {
                 return ActivityLogsListResponse::InternalError(Json(ErrorResponse {
@@ -124,7 +125,7 @@ impl ActivityLogApi {
             .order(activity_log::created_at.desc())
             .limit(per_page)
             .offset(offset)
-            .load::<ActivityLog>(&mut conn)
+            .load::<ActivityLog>(&mut conn).await
         {
             Ok(logs) => logs,
             Err(e) => {
@@ -142,7 +143,7 @@ impl ActivityLogApi {
             users::table
                 .filter(users::id.eq_any(&user_ids))
                 .select((users::id, users::email))
-                .load::<(uuid::Uuid, String)>(&mut conn)
+                .load::<(uuid::Uuid, String)>(&mut conn).await
                 .unwrap_or_default()
                 .into_iter()
                 .collect()
