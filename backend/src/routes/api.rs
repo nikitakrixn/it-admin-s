@@ -1,4 +1,3 @@
-use crate::config::database::Pool;
 use poem_openapi::{OpenApi, payload::Json};
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +7,11 @@ pub struct HealthResponse {
     pub version: String,
 }
 
-pub struct Api {
-    db_pool: Pool,
-}
+pub struct Api;
 
 impl Api {
-    pub fn new(db_pool: Pool) -> Self {
-        Self { db_pool }
+    pub fn new() -> Self {
+        Self
     }
 }
 

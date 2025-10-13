@@ -4,6 +4,7 @@ use poem_openapi::{ApiResponse, Object, OpenApi, param::Path, param::Query, payl
 use serde::{Deserialize, Serialize};
 
 use crate::config::database::Pool;
+use crate::middleware;
 use crate::models::employee::{
     Department, DepartmentResponse, DepartmentWithCounts, Employee, EmployeeResponse,
     NewDepartment, NewEmployeeRequest, NewPosition, Position, PositionResponse,
@@ -329,7 +330,11 @@ impl EmployeesApi {
 
     /// Create new employee
     #[oai(path = "/", method = "post")]
-    async fn create_employee(&self, Json(req): Json<NewEmployeeRequest>) -> EmployeeCreateResponse {
+    async fn create_employee(
+        &self,
+        auth: middleware::auth::JwtAuth,
+        Json(req): Json<NewEmployeeRequest>,
+    ) -> EmployeeCreateResponse {
         let new_employee = match req.to_new_employee() {
             Ok(emp) => emp,
             Err(e) => {
@@ -362,8 +367,10 @@ impl EmployeesApi {
                     "department_id": employee.department_id,
                     "position_id": employee.position_id,
                 });
+                
+                use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
-                    None, // TODO: Extract user_id from JWT in middleware
+                    auth.0.user_id(), // User ID from JWT
                     "created",
                     "employee",
                     employee.id,
@@ -411,6 +418,7 @@ impl EmployeesApi {
     #[oai(path = "/:id", method = "put")]
     async fn update_employee(
         &self,
+        auth: middleware::auth::JwtAuth,
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
@@ -575,8 +583,9 @@ impl EmployeesApi {
                         "employee_name": employee.full_name(),
                         "changes": changes,
                     });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
-                        None,
+                        auth.0.user_id(),
                         "updated",
                         "employee",
                         employee.id,
@@ -629,7 +638,11 @@ impl EmployeesApi {
 
     /// Delete employee
     #[oai(path = "/:id", method = "delete")]
-    async fn delete_employee(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
+    async fn delete_employee(
+        &self,
+        auth: middleware::auth::JwtAuth,
+        Path(id): Path<i32>,
+    ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
@@ -702,8 +715,9 @@ impl EmployeesApi {
                         "position": position,
                         "department": department,
                     });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log
-                        .log_with_details_async(None, "deleted", "employee", id, details);
+                        .log_with_details_async(auth.0.user_id(), "deleted", "employee", id, details);
                 }
                 EmployeeDeleteResponse::NoContent
             }
@@ -718,6 +732,7 @@ impl EmployeesApi {
     #[oai(path = "/bulk-delete", method = "post")]
     async fn bulk_delete_employees(
         &self,
+        auth: middleware::auth::JwtAuth,
         Json(req): Json<BulkDeleteRequest>,
     ) -> BulkDeleteEmployeesResponse {
         if req.ids.is_empty() {
@@ -745,7 +760,8 @@ impl EmployeesApi {
                 Ok(count) if count > 0 => {
                     deleted_count += 1;
                     // Log activity
-                    self.activity_log.log_async(None, "deleted", "employee", id);
+                    use crate::middleware::auth::ClaimsExt;
+                    self.activity_log.log_async(auth.0.user_id(), "deleted", "employee", id);
                 }
                 Ok(_) => failed_ids.push(id),
                 Err(_) => failed_ids.push(id),
@@ -801,6 +817,7 @@ impl EmployeesApi {
     #[oai(path = "/departments", method = "post")]
     async fn create_department(
         &self,
+        auth: middleware::auth::JwtAuth,
         Json(new_dept): Json<NewDepartment>,
     ) -> DepartmentDetailResponse {
         let mut conn = match self.db_pool.get().await {
@@ -823,8 +840,9 @@ impl EmployeesApi {
                     "department_name": dept.name,
                     "description": dept.description,
                 });
+                use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
-                    None,
+                    auth.0.user_id(),
                     "created",
                     "department",
                     dept.id,
@@ -852,6 +870,7 @@ impl EmployeesApi {
     #[oai(path = "/departments/:id", method = "put")]
     async fn update_department(
         &self,
+        auth: middleware::auth::JwtAuth,
         Path(id): Path<i32>,
         Json(update_data): Json<UpdateDepartment>,
     ) -> DepartmentDetailResponse {
@@ -915,8 +934,9 @@ impl EmployeesApi {
                         "department_name": dept.name,
                         "changes": changes,
                     });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
-                        None,
+                        auth.0.user_id(),
                         "updated",
                         "department",
                         dept.id,
@@ -956,7 +976,11 @@ impl EmployeesApi {
 
     /// Delete department
     #[oai(path = "/departments/:id", method = "delete")]
-    async fn delete_department(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
+    async fn delete_department(
+        &self,
+        auth: middleware::auth::JwtAuth,
+        Path(id): Path<i32>,
+    ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
@@ -985,8 +1009,9 @@ impl EmployeesApi {
                 // Log activity
                 if let Some(name) = dept_name {
                     let details = serde_json::json!({ "department_name": name });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
-                        None,
+                        auth.0.user_id(),
                         "deleted",
                         "department",
                         id,
@@ -1004,7 +1029,11 @@ impl EmployeesApi {
 
     /// Create new position
     #[oai(path = "/positions", method = "post")]
-    async fn create_position(&self, Json(new_pos): Json<NewPosition>) -> PositionDetailResponse {
+    async fn create_position(
+        &self,
+        auth: middleware::auth::JwtAuth,
+        Json(new_pos): Json<NewPosition>,
+    ) -> PositionDetailResponse {
         let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
@@ -1041,8 +1070,9 @@ impl EmployeesApi {
                     "position_name": pos.name,
                     "department_id": pos.department_id,
                 });
+                use crate::middleware::auth::ClaimsExt;
                 self.activity_log
-                    .log_with_details_async(None, "created", "position", pos.id, details);
+                    .log_with_details_async(auth.0.user_id(), "created", "position", pos.id, details);
 
                 let department_name = if let Some(dept_id) = pos.department_id {
                             departments::table
@@ -1075,6 +1105,7 @@ impl EmployeesApi {
     #[oai(path = "/positions/:id", method = "put")]
     async fn update_position(
         &self,
+        auth: middleware::auth::JwtAuth,
         Path(id): Path<i32>,
         Json(update_data): Json<UpdatePosition>,
     ) -> PositionDetailResponse {
@@ -1155,8 +1186,9 @@ impl EmployeesApi {
                         "position_name": pos.name,
                         "changes": changes,
                     });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log
-                        .log_with_details_async(None, "updated", "position", pos.id, details);
+                        .log_with_details_async(auth.0.user_id(), "updated", "position", pos.id, details);
                 }
 
                 let department_name = if let Some(dept_id) = pos.department_id {
@@ -1195,7 +1227,11 @@ impl EmployeesApi {
 
     /// Delete position
     #[oai(path = "/positions/:id", method = "delete")]
-    async fn delete_position(&self, Path(id): Path<i32>) -> EmployeeDeleteResponse {
+    async fn delete_position(
+        &self,
+        auth: middleware::auth::JwtAuth,
+        Path(id): Path<i32>,
+    ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {
             Ok(conn) => conn,
             Err(e) => {
@@ -1224,8 +1260,9 @@ impl EmployeesApi {
                 // Log activity
                 if let Some(name) = pos_name {
                     let details = serde_json::json!({ "position_name": name });
+                    use crate::middleware::auth::ClaimsExt;
                     self.activity_log
-                        .log_with_details_async(None, "deleted", "position", id, details);
+                        .log_with_details_async(auth.0.user_id(), "deleted", "position", id, details);
                 }
                 EmployeeDeleteResponse::NoContent
             }

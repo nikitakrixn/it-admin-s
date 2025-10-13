@@ -1,78 +1,56 @@
-use poem::{Endpoint, Error, Middleware, Request, Result, http::StatusCode};
+use poem::Request;
+use poem_openapi::auth::Bearer;
+use poem_openapi::SecurityScheme;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::services::auth_service::{AuthService, Claims};
 
-/// Middleware для проверки JWT токена
-pub struct AuthMiddleware {
-    auth_service: Arc<AuthService>,
-}
+/// JWT Bearer Authentication для OpenAPI
+/// 
+/// Использование в handlers:
+/// ```rust
+/// #[oai(path = "/protected", method = "get")]
+/// async fn protected_endpoint(&self, auth: JwtAuth) -> Response {
+///     let user_id = auth.0.sub; // UUID пользователя
+///     // ...
+/// }
+/// ```
+#[derive(SecurityScheme)]
+#[oai(
+    ty = "bearer",
+    bearer_format = "JWT",
+    checker = "jwt_checker"
+)]
+pub struct JwtAuth(pub Claims);
 
-impl AuthMiddleware {
-    pub fn new(auth_service: Arc<AuthService>) -> Self {
-        Self { auth_service }
-    }
-}
-
-impl<E: Endpoint> Middleware<E> for AuthMiddleware {
-    type Output = AuthMiddlewareImpl<E>;
-
-    fn transform(&self, ep: E) -> Self::Output {
-        AuthMiddlewareImpl {
-            ep,
-            auth_service: self.auth_service.clone(),
+/// Функция проверки JWT токена
+/// 
+/// Вызывается автоматически poem-openapi при каждом запросе к защищенному endpoint
+async fn jwt_checker(req: &Request, bearer: Bearer) -> Option<Claims> {
+    // Получаем AuthService из app data
+    let auth_service = req.data::<Arc<AuthService>>()?;
+    
+    // Проверяем токен
+    match auth_service.verify_token(&bearer.token) {
+        Ok(claims) => {
+            tracing::debug!("JWT verified for user: {}", claims.sub);
+            Some(claims)
+        }
+        Err(e) => {
+            tracing::warn!("JWT verification failed: {}", e);
+            None
         }
     }
 }
 
-pub struct AuthMiddlewareImpl<E> {
-    ep: E,
-    auth_service: Arc<AuthService>,
+/// Helper trait для извлечения user_id из Claims
+pub trait ClaimsExt {
+    fn user_id(&self) -> Option<Uuid>;
 }
 
-impl<E: Endpoint> Endpoint for AuthMiddlewareImpl<E> {
-    type Output = E::Output;
-
-    async fn call(&self, mut req: Request) -> Result<Self::Output> {
-        // Извлечь Authorization header
-        let auth_header = req
-            .headers()
-            .get("authorization")
-            .and_then(|h| h.to_str().ok())
-            .ok_or_else(|| {
-                Error::from_string("Missing authorization header", StatusCode::UNAUTHORIZED)
-            })?;
-
-        // Проверить формат "Bearer <token>"
-        if !auth_header.starts_with("Bearer ") {
-            return Err(Error::from_string(
-                "Invalid authorization header format",
-                StatusCode::UNAUTHORIZED,
-            ));
-        }
-
-        let token = &auth_header[7..]; // Убрать "Bearer "
-
-        // Валидировать токен
-        let claims = self.auth_service.verify_token(token).map_err(|_| {
-            Error::from_string("Invalid or expired token", StatusCode::UNAUTHORIZED)
-        })?;
-
-        // Сохранить claims в extensions для использования в handlers
-        req.extensions_mut().insert(claims);
-
-        // Продолжить обработку запроса
-        self.ep.call(req).await
-    }
-}
-
-/// Helper для извлечения Claims из request
-pub trait RequestExt {
-    fn claims(&self) -> Option<&Claims>;
-}
-
-impl RequestExt for Request {
-    fn claims(&self) -> Option<&Claims> {
-        self.extensions().get::<Claims>()
+impl ClaimsExt for Claims {
+    fn user_id(&self) -> Option<Uuid> {
+        self.sub.parse().ok()
     }
 }

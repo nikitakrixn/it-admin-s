@@ -73,18 +73,18 @@ async fn main() -> Result<(), std::io::Error> {
     let db_pool = config::database::create_async_pool(&config.database)
         .expect("Failed to create async database pool");
 
-    // Create services
-    let auth_service = services::auth_service::AuthService::new(
+    // Create services (wrap AuthService in Arc for sharing)
+    let auth_service = std::sync::Arc::new(services::auth_service::AuthService::new(
         db_pool.clone(),
         config.jwt.secret.clone(),
         config.jwt.expiration,
-    );
+    ));
 
     // Create API service with OpenAPI documentation
     let api_service = OpenApiService::new(
         (
-            routes::api::Api::new(db_pool.clone()),
-            routes::auth::AuthApi::new(auth_service),
+            routes::api::Api::new(),
+            routes::auth::AuthApi::new(auth_service.clone()),
             routes::employees::EmployeesApi::new(db_pool.clone()),
             routes::activity_log::ActivityLogApi::new(db_pool.clone()),
         ),
@@ -117,6 +117,7 @@ async fn main() -> Result<(), std::io::Error> {
         .nest("/docs", ui)
         .nest("/api-spec", spec)
         .at("/health", poem::endpoint::make_sync(|_| "OK"))
+        .data(auth_service) // Добавляем AuthService в app data для jwt_checker
         .with(cors)
         .with(Tracing);
 

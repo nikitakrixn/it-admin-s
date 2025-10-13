@@ -93,11 +93,11 @@ pub enum MeResponse {
 // ============================================================================
 
 pub struct AuthApi {
-    auth_service: AuthService,
+    auth_service: std::sync::Arc<AuthService>,
 }
 
 impl AuthApi {
-    pub fn new(auth_service: AuthService) -> Self {
+    pub fn new(auth_service: std::sync::Arc<AuthService>) -> Self {
         Self { auth_service }
     }
 }
