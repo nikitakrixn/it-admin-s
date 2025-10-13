@@ -5,6 +5,7 @@ use crate::config::database::Pool;
 use crate::models::activity_log::NewActivityLog;
 use crate::models::schema::activity_log;
 
+#[derive(Clone)]
 pub struct ActivityLogService {
     db_pool: Pool,
 }

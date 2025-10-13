@@ -79,6 +79,8 @@ async fn main() -> Result<(), std::io::Error> {
         config.jwt.secret.clone(),
         config.jwt.expiration,
     ));
+    
+    let activity_log = services::activity_log_service::ActivityLogService::new(db_pool.clone());
 
     // Create API service with OpenAPI documentation
     let api_service = OpenApiService::new(
@@ -87,6 +89,7 @@ async fn main() -> Result<(), std::io::Error> {
             routes::auth::AuthApi::new(auth_service.clone()),
             routes::employees::EmployeesApi::new(db_pool.clone()),
             routes::activity_log::ActivityLogApi::new(db_pool.clone()),
+            routes::software::SoftwareApi::new(db_pool.clone(), activity_log.clone()),
         ),
         &config.app.name,
         env!("CARGO_PKG_VERSION"),
