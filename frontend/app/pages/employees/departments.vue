@@ -35,7 +35,7 @@
                         </p>
                     </div>
                 </div>
-                <button @click="openCreateModal" class="btn btn-primary">
+                <button v-if="isAdmin" @click="openCreateModal" class="btn btn-primary">
                     <Icon name="ri:add-line" class="mr-2" />
                     {{
                         activeTab === "departments"
@@ -348,6 +348,7 @@
                         </div>
 
                         <div
+                            v-if="isAdmin"
                             class="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2"
                         >
                             <button
@@ -467,6 +468,7 @@
                                 </td>
                                 <td class="px-6 py-4">
                                     <div
+                                        v-if="isAdmin"
                                         class="flex items-center justify-end gap-2"
                                     >
                                         <button
@@ -692,6 +694,7 @@ useHead({
 });
 
 const toast = useToast();
+const { isAdmin } = useAuth();
 const {
     fetchDepartments,
     fetchPositions,
@@ -898,7 +901,11 @@ const handleSubmit = async () => {
 
         closeModals();
     } catch (err: any) {
-        errorMessage.value = err.message || "Ошибка при сохранении";
+        if (err.statusCode === 401) {
+            errorMessage.value = "Недостаточно прав. Требуется роль администратора.";
+        } else {
+            errorMessage.value = err.message || "Ошибка при сохранении";
+        }
         toast.error(errorMessage.value);
     } finally {
         saving.value = false;
@@ -946,7 +953,11 @@ const confirmDelete = async () => {
         showDeleteModal.value = false;
         itemToDelete.value = null;
     } catch (err: any) {
-        toast.error(err.message || "Ошибка при удалении");
+        if (err.statusCode === 401) {
+            toast.error("Недостаточно прав. Требуется роль администратора.");
+        } else {
+            toast.error(err.message || "Ошибка при удалении");
+        }
     } finally {
         deleting.value = false;
     }

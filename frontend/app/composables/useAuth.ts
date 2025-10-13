@@ -128,11 +128,13 @@ export const useAuth = () => {
   };
 
   const isAuthenticated = computed(() => !!token.value && !!user.value);
+  const isAdmin = computed(() => user.value?.role === "admin");
 
   return {
     user: readonly(user),
     token: readonly(token),
     isAuthenticated,
+    isAdmin,
     login,
     register,
     fetchUser,

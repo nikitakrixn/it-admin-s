@@ -6,36 +6,28 @@ use uuid::Uuid;
 
 use crate::services::auth_service::{AuthService, Claims};
 
-/// JWT Bearer Authentication для OpenAPI
-/// 
-/// Использование в handlers:
-/// ```rust
-/// #[oai(path = "/protected", method = "get")]
-/// async fn protected_endpoint(&self, auth: JwtAuth) -> Response {
-///     let user_id = auth.0.sub; // UUID пользователя
-///     // ...
-/// }
-/// ```
+/// Admin-only JWT Authentication
 #[derive(SecurityScheme)]
 #[oai(
     ty = "bearer",
     bearer_format = "JWT",
-    checker = "jwt_checker"
+    checker = "admin_checker"
 )]
-pub struct JwtAuth(pub Claims);
+pub struct AdminAuth(pub Claims);
 
-/// Функция проверки JWT токена
-/// 
-/// Вызывается автоматически poem-openapi при каждом запросе к защищенному endpoint
-async fn jwt_checker(req: &Request, bearer: Bearer) -> Option<Claims> {
-    // Получаем AuthService из app data
+/// Check if admin
+async fn admin_checker(req: &Request, bearer: Bearer) -> Option<Claims> {
     let auth_service = req.data::<Arc<AuthService>>()?;
     
-    // Проверяем токен
     match auth_service.verify_token(&bearer.token) {
         Ok(claims) => {
-            tracing::debug!("JWT verified for user: {}", claims.sub);
-            Some(claims)
+            if claims.role == "admin" {
+                tracing::debug!("Admin JWT verified for user: {}", claims.sub);
+                Some(claims)
+            } else {
+                tracing::warn!("Access denied: user {} is not admin (role: {})", claims.sub, claims.role);
+                None
+            }
         }
         Err(e) => {
             tracing::warn!("JWT verification failed: {}", e);

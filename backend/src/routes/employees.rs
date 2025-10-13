@@ -332,7 +332,7 @@ impl EmployeesApi {
     #[oai(path = "/", method = "post")]
     async fn create_employee(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Json(req): Json<NewEmployeeRequest>,
     ) -> EmployeeCreateResponse {
         let new_employee = match req.to_new_employee() {
@@ -418,7 +418,7 @@ impl EmployeesApi {
     #[oai(path = "/:id", method = "put")]
     async fn update_employee(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
@@ -640,7 +640,7 @@ impl EmployeesApi {
     #[oai(path = "/:id", method = "delete")]
     async fn delete_employee(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {
@@ -732,7 +732,7 @@ impl EmployeesApi {
     #[oai(path = "/bulk-delete", method = "post")]
     async fn bulk_delete_employees(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Json(req): Json<BulkDeleteRequest>,
     ) -> BulkDeleteEmployeesResponse {
         if req.ids.is_empty() {
@@ -817,7 +817,7 @@ impl EmployeesApi {
     #[oai(path = "/departments", method = "post")]
     async fn create_department(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Json(new_dept): Json<NewDepartment>,
     ) -> DepartmentDetailResponse {
         let mut conn = match self.db_pool.get().await {
@@ -870,7 +870,7 @@ impl EmployeesApi {
     #[oai(path = "/departments/:id", method = "put")]
     async fn update_department(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
         Json(update_data): Json<UpdateDepartment>,
     ) -> DepartmentDetailResponse {
@@ -978,7 +978,7 @@ impl EmployeesApi {
     #[oai(path = "/departments/:id", method = "delete")]
     async fn delete_department(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {
@@ -1031,7 +1031,7 @@ impl EmployeesApi {
     #[oai(path = "/positions", method = "post")]
     async fn create_position(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Json(new_pos): Json<NewPosition>,
     ) -> PositionDetailResponse {
         let mut conn = match self.db_pool.get().await {
@@ -1105,7 +1105,7 @@ impl EmployeesApi {
     #[oai(path = "/positions/:id", method = "put")]
     async fn update_position(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
         Json(update_data): Json<UpdatePosition>,
     ) -> PositionDetailResponse {
@@ -1229,7 +1229,7 @@ impl EmployeesApi {
     #[oai(path = "/positions/:id", method = "delete")]
     async fn delete_position(
         &self,
-        auth: middleware::auth::JwtAuth,
+        auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> EmployeeDeleteResponse {
         let mut conn = match self.db_pool.get().await {

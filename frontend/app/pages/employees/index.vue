@@ -19,7 +19,7 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <button
-                        v-if="selectedIds.length > 0"
+                        v-if="isAdmin && selectedIds.length > 0"
                         @click="openBulkDeleteModal"
                         class="btn bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
                     >
@@ -33,7 +33,7 @@
                         <Icon name="ri:building-line" class="mr-2" />
                         Отделы и Должности
                     </NuxtLink>
-                    <NuxtLink to="/employees/create" class="btn btn-primary">
+                    <NuxtLink v-if="isAdmin" to="/employees/create" class="btn btn-primary">
                         <Icon name="ri:add-line" class="mr-2" />
                         Добавить
                     </NuxtLink>
@@ -208,7 +208,7 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-left w-12">
+                            <th v-if="isAdmin" class="px-4 py-3 text-left w-12">
                                 <input
                                     type="checkbox"
                                     v-model="selectAll"
@@ -250,7 +250,7 @@
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <tr v-if="!employees.length">
-                            <td colspan="7" class="px-6 py-16 text-center">
+                            <td :colspan="isAdmin ? 7 : 6" class="px-6 py-16 text-center">
                                 <div class="flex flex-col items-center">
                                     <div
                                         class="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center mb-4"
@@ -288,7 +288,7 @@
                             :key="employee.id"
                             class="hover:bg-gray-50 transition-colors"
                         >
-                            <td class="px-4 py-4">
+                            <td v-if="isAdmin" class="px-4 py-4">
                                 <input
                                     type="checkbox"
                                     :checked="selectedIds.includes(employee.id)"
@@ -388,6 +388,7 @@
                                         <Icon name="ri:eye-line" />
                                     </NuxtLink>
                                     <NuxtLink
+                                        v-if="isAdmin"
                                         :to="`/employees/${employee.id}/edit`"
                                         class="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                         title="Редактировать"
@@ -395,6 +396,7 @@
                                         <Icon name="ri:edit-line" />
                                     </NuxtLink>
                                     <button
+                                        v-if="isAdmin"
                                         @click="openDeleteModal(employee)"
                                         class="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Удалить"
@@ -495,6 +497,7 @@ useHead({
     title: "Сотрудники",
 });
 
+const { isAdmin } = useAuth();
 const {
     fetchEmployees,
     fetchDepartments,
@@ -633,8 +636,12 @@ const confirmDelete = async () => {
         await refresh();
         showDeleteModal.value = false;
         employeeToDelete.value = null;
-    } catch (err) {
-        alert("Ошибка при удалении сотрудника");
+    } catch (err: any) {
+        if (err.statusCode === 401) {
+            alert("Недостаточно прав. Требуется роль администратора для удаления сотрудников.");
+        } else {
+            alert("Ошибка при удалении сотрудника: " + (err.message || "Неизвестная ошибка"));
+        }
     } finally {
         deleting.value = false;
     }
@@ -666,8 +673,12 @@ const confirmBulkDelete = async () => {
         selectAll.value = false;
         await refresh();
         showBulkDeleteModal.value = false;
-    } catch (err) {
-        alert("Ошибка при массовом удалении сотрудников");
+    } catch (err: any) {
+        if (err.statusCode === 401) {
+            alert("Недостаточно прав. Требуется роль администратора для удаления сотрудников.");
+        } else {
+            alert("Ошибка при массовом удалении сотрудников: " + (err.message || "Неизвестная ошибка"));
+        }
     } finally {
         bulkDeleting.value = false;
     }

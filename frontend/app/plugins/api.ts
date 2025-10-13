@@ -1,6 +1,7 @@
 export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig();
   const token = useCookie("auth_token");
+  const user = useState<any>("user");
 
   const api = $fetch.create({
     baseURL: config.public.apiBase,
@@ -13,11 +14,14 @@ export default defineNuxtPlugin(() => {
         };
       }
     },
-    onResponseError({ response }) {
-      // Обработка ошибок авторизации
+    onResponseError({ response, request }) {
       if (response.status === 401) {
-        token.value = null;
-        navigateTo("/login");
+        if (user.value && token.value) {
+          console.warn("Access denied: insufficient permissions");
+        } else {
+          token.value = null;
+          navigateTo("/login");
+        }
       }
     },
   });
