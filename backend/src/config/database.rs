@@ -2,6 +2,8 @@ use diesel::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 
 pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
+
+#[allow(dead_code)]
 pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
 use super::DatabaseConfig;

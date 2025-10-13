@@ -40,6 +40,7 @@ pub struct CorsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct AdConfig {
     pub enabled: bool,
     pub server: String,
@@ -51,6 +52,7 @@ pub struct AdConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct MikrotikConfig {
     pub enabled: bool,
     pub host: String,

@@ -19,17 +19,17 @@ async fn main() -> Result<(), std::io::Error> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
+    // Load configuration
+    let config = config::Config::from_env().expect("Failed to load configuration");
+
+    // Initialize tracing with log level from config
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,it_admin_backend=debug".into()),
+                .unwrap_or_else(|_| format!("{},it_admin_backend=debug", config.app.log_level).into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    // Load configuration
-    let config = config::Config::from_env().expect("Failed to load configuration");
 
     tracing::info!(
         "Starting {} v{}",
@@ -37,6 +37,20 @@ async fn main() -> Result<(), std::io::Error> {
         env!("CARGO_PKG_VERSION")
     );
     tracing::info!("Environment: {}", config.app.env);
+    tracing::info!("Log level: {}", config.app.log_level);
+    
+    // Log optional integrations status
+    if let Some(ad_config) = &config.ad {
+        if ad_config.enabled {
+            tracing::info!("Active Directory integration enabled: {}", ad_config.server);
+        }
+    }
+    
+    if let Some(mikrotik_config) = &config.mikrotik {
+        if mikrotik_config.enabled {
+            tracing::info!("MikroTik integration enabled: {}:{}", mikrotik_config.host, mikrotik_config.port);
+        }
+    }
 
     // Initialize database connection pool
     let db_pool =
@@ -83,19 +97,24 @@ async fn main() -> Result<(), std::io::Error> {
     let ui = api_service.swagger_ui();
     let spec = api_service.spec_endpoint();
 
+    // Build CORS middleware from config
+    let mut cors = Cors::new()
+        .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
+        .allow_credentials(true)
+        .max_age(3600);
+    
+    // Add allowed origins from config
+    for origin in &config.cors.allowed_origins {
+        cors = cors.allow_origin(origin.as_str());
+    }
+
     // Build application routes
     let app = Route::new()
         .nest("/api", api_service)
         .nest("/docs", ui)
         .nest("/api-spec", spec)
         .at("/health", poem::endpoint::make_sync(|_| "OK"))
-        .with(
-            Cors::new()
-                .allow_origin("http://localhost:3000")
-                .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
-                .allow_credentials(true)
-                .max_age(3600),
-        )
+        .with(cors)
         .with(Tracing);
 
     // Start server
