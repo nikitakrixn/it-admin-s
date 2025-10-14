@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1
+
 # Build stage
-FROM rust:1.83-slim as builder
+FROM rust:1.90-slim as builder
 
 WORKDIR /app
 
@@ -19,8 +21,10 @@ RUN mkdir src && \
     cargo build --release && \
     rm -rf src
 
-# Copy source code
-COPY . .
+# Copy source code and migrations
+COPY src ./src
+COPY migrations ./migrations
+COPY diesel.toml ./
 
 # Build application
 RUN cargo build --release
@@ -36,8 +40,26 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy binary from builder
+# Create non-privileged user
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "10001" \
+    appuser
+
+# Copy binary and migrations from builder
 COPY --from=builder /app/target/release/it-admin-backend /app/
+COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /app/diesel.toml /app/
+
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8000

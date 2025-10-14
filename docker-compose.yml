@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -43,13 +41,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: itadmin-backend
+    env_file:
+      - ./backend/.env
     environment:
       DATABASE_URL: postgres://admin:secure_password@postgres:5432/itadmin
       REDIS_URL: redis://redis:6379
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
-      JWT_SECRET: your-super-secret-jwt-key-change-this
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:
@@ -59,9 +57,12 @@ services:
         condition: service_healthy
     networks:
       - itadmin-network
-    volumes:
-      - ./backend:/app
-      - backend_target:/app/target
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
   # Nuxt Frontend
@@ -70,18 +71,23 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: itadmin-frontend
+    env_file:
+      - ./frontend/.env
     environment:
-      NUXT_PUBLIC_API_BASE: http://localhost:8000/api
+      NUXT_PUBLIC_API_BASE: http://backend:8000/api
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - itadmin-network
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.nuxt
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
 networks:
@@ -91,4 +97,3 @@ networks:
 volumes:
   postgres_data:
   redis_data:
-  backend_target:
