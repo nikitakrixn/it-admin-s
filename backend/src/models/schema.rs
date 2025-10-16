@@ -125,6 +125,45 @@ diesel::table! {
 }
 
 diesel::table! {
+    antivirus_scan_history (id) {
+        id -> Int4,
+        computer_id -> Int4,
+        #[max_length = 50]
+        scan_type -> Varchar,
+        started_at -> Timestamp,
+        completed_at -> Nullable<Timestamp>,
+        duration_seconds -> Nullable<Int4>,
+        files_scanned -> Nullable<Int4>,
+        threats_found -> Nullable<Int4>,
+        threats_removed -> Nullable<Int4>,
+        #[max_length = 50]
+        scan_result -> Nullable<Varchar>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    antivirus_threats (id) {
+        id -> Int4,
+        computer_id -> Int4,
+        #[max_length = 255]
+        threat_name -> Varchar,
+        #[max_length = 50]
+        threat_type -> Nullable<Varchar>,
+        #[max_length = 20]
+        severity -> Nullable<Varchar>,
+        file_path -> Nullable<Text>,
+        detected_at -> Timestamp,
+        #[max_length = 50]
+        action_taken -> Nullable<Varchar>,
+        #[max_length = 20]
+        status -> Nullable<Varchar>,
+        resolved_at -> Nullable<Timestamp>,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     api_tokens (id) {
         id -> Int4,
         #[max_length = 255]
@@ -209,6 +248,49 @@ diesel::table! {
 }
 
 diesel::table! {
+    certificate_renewals (id) {
+        id -> Int4,
+        old_certificate_id -> Nullable<Int4>,
+        new_certificate_id -> Nullable<Int4>,
+        renewed_at -> Timestamp,
+        renewed_by -> Nullable<Uuid>,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    certificates (id) {
+        id -> Int4,
+        #[max_length = 50]
+        certificate_type -> Varchar,
+        #[max_length = 500]
+        subject -> Varchar,
+        #[max_length = 500]
+        issuer -> Nullable<Varchar>,
+        #[max_length = 100]
+        serial_number -> Nullable<Varchar>,
+        #[max_length = 100]
+        thumbprint -> Nullable<Varchar>,
+        #[max_length = 50]
+        algorithm -> Nullable<Varchar>,
+        key_size -> Nullable<Int4>,
+        valid_from -> Date,
+        valid_to -> Date,
+        computer_id -> Nullable<Int4>,
+        #[max_length = 50]
+        store_location -> Nullable<Varchar>,
+        #[max_length = 50]
+        store_name -> Nullable<Varchar>,
+        has_private_key -> Nullable<Bool>,
+        purpose -> Nullable<Text>,
+        san_entries -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     checklist_items (id) {
         id -> Int4,
         checklist_id -> Int4,
@@ -287,6 +369,37 @@ diesel::table! {
         changed_by -> Nullable<Uuid>,
         notes -> Nullable<Text>,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    computer_antivirus (id) {
+        id -> Int4,
+        computer_id -> Int4,
+        #[max_length = 255]
+        product_name -> Varchar,
+        #[max_length = 100]
+        manufacturer -> Nullable<Varchar>,
+        #[max_length = 100]
+        version -> Nullable<Varchar>,
+        #[max_length = 50]
+        status -> Varchar,
+        is_enabled -> Nullable<Bool>,
+        real_time_protection -> Nullable<Bool>,
+        last_update -> Nullable<Timestamp>,
+        #[max_length = 100]
+        definitions_version -> Nullable<Varchar>,
+        definitions_date -> Nullable<Date>,
+        last_scan -> Nullable<Timestamp>,
+        #[max_length = 50]
+        last_scan_type -> Nullable<Varchar>,
+        threats_detected -> Nullable<Int4>,
+        threats_quarantined -> Nullable<Int4>,
+        #[max_length = 50]
+        license_status -> Nullable<Varchar>,
+        license_expiry_date -> Nullable<Date>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -542,6 +655,13 @@ diesel::table! {
         temperature -> Nullable<Int4>,
         power_on_hours -> Nullable<Int4>,
         reallocated_sectors -> Nullable<Int4>,
+        last_defrag_date -> Nullable<Date>,
+        fragmentation_percent -> Nullable<Int4>,
+        read_errors -> Nullable<Int4>,
+        write_errors -> Nullable<Int4>,
+        wear_level_percent -> Nullable<Int4>,
+        total_bytes_written -> Nullable<Int8>,
+        power_cycle_count -> Nullable<Int4>,
     }
 }
 
@@ -760,6 +880,69 @@ diesel::table! {
 }
 
 diesel::table! {
+    domain_account_history (id) {
+        id -> Int4,
+        account_id -> Int4,
+        #[max_length = 50]
+        action -> Varchar,
+        #[max_length = 100]
+        field_name -> Nullable<Varchar>,
+        old_value -> Nullable<Text>,
+        new_value -> Nullable<Text>,
+        #[max_length = 255]
+        changed_by -> Nullable<Varchar>,
+        changed_at -> Timestamp,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    domain_accounts (id) {
+        id -> Int4,
+        employee_id -> Nullable<Int4>,
+        #[max_length = 100]
+        username -> Varchar,
+        #[max_length = 255]
+        display_name -> Nullable<Varchar>,
+        #[max_length = 255]
+        email -> Nullable<Varchar>,
+        #[max_length = 50]
+        account_type -> Varchar,
+        distinguished_name -> Nullable<Text>,
+        #[max_length = 255]
+        user_principal_name -> Nullable<Varchar>,
+        #[max_length = 100]
+        sam_account_name -> Nullable<Varchar>,
+        password_last_set -> Nullable<Timestamp>,
+        password_expires_at -> Nullable<Timestamp>,
+        password_never_expires -> Nullable<Bool>,
+        must_change_password -> Nullable<Bool>,
+        cannot_change_password -> Nullable<Bool>,
+        account_expires_at -> Nullable<Timestamp>,
+        is_enabled -> Nullable<Bool>,
+        is_locked -> Nullable<Bool>,
+        locked_at -> Nullable<Timestamp>,
+        lockout_time -> Nullable<Timestamp>,
+        last_logon -> Nullable<Timestamp>,
+        #[max_length = 45]
+        last_logon_ip -> Nullable<Varchar>,
+        logon_count -> Nullable<Int4>,
+        bad_password_count -> Nullable<Int4>,
+        bad_password_time -> Nullable<Timestamp>,
+        #[max_length = 500]
+        home_directory -> Nullable<Varchar>,
+        #[max_length = 500]
+        profile_path -> Nullable<Varchar>,
+        #[max_length = 500]
+        script_path -> Nullable<Varchar>,
+        description -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     employees (id) {
         id -> Int4,
         #[max_length = 50]
@@ -825,6 +1008,14 @@ diesel::table! {
         next_maintenance_date -> Nullable<Date>,
         toner_level -> Nullable<Int4>,
         page_count -> Nullable<Int4>,
+        paper_jam_count -> Nullable<Int4>,
+        total_pages_printed -> Nullable<Int4>,
+        color_pages_printed -> Nullable<Int4>,
+        mono_pages_printed -> Nullable<Int4>,
+        #[max_length = 50]
+        last_error_code -> Nullable<Varchar>,
+        last_error_time -> Nullable<Timestamp>,
+        supplies_status -> Nullable<Jsonb>,
     }
 }
 
@@ -879,6 +1070,74 @@ diesel::table! {
         description -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    incident_evidence (id) {
+        id -> Int4,
+        incident_id -> Int4,
+        #[max_length = 50]
+        evidence_type -> Nullable<Varchar>,
+        #[max_length = 255]
+        file_name -> Nullable<Varchar>,
+        #[max_length = 500]
+        file_path -> Nullable<Varchar>,
+        #[max_length = 128]
+        file_hash -> Nullable<Varchar>,
+        description -> Nullable<Text>,
+        collected_at -> Nullable<Timestamp>,
+        collected_by -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    inventory_audit_items (id) {
+        id -> Int4,
+        audit_id -> Int4,
+        #[max_length = 50]
+        entity_type -> Varchar,
+        entity_id -> Int4,
+        #[max_length = 100]
+        expected_location -> Nullable<Varchar>,
+        #[max_length = 100]
+        actual_location -> Nullable<Varchar>,
+        #[max_length = 50]
+        expected_condition -> Nullable<Varchar>,
+        #[max_length = 50]
+        actual_condition -> Nullable<Varchar>,
+        #[max_length = 20]
+        status -> Varchar,
+        discrepancy_notes -> Nullable<Text>,
+        #[max_length = 500]
+        photo_url -> Nullable<Varchar>,
+        checked_at -> Nullable<Timestamp>,
+        checked_by -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    inventory_audits (id) {
+        id -> Int4,
+        #[max_length = 255]
+        audit_name -> Varchar,
+        audit_date -> Date,
+        #[max_length = 50]
+        audit_type -> Varchar,
+        #[max_length = 100]
+        location -> Nullable<Varchar>,
+        department_id -> Nullable<Int4>,
+        audited_by -> Uuid,
+        #[max_length = 20]
+        status -> Nullable<Varchar>,
+        total_items -> Nullable<Int4>,
+        found_items -> Nullable<Int4>,
+        missing_items -> Nullable<Int4>,
+        damaged_items -> Nullable<Int4>,
+        notes -> Nullable<Text>,
+        started_at -> Nullable<Timestamp>,
+        completed_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
     }
 }
 
@@ -1222,6 +1481,96 @@ diesel::table! {
 }
 
 diesel::table! {
+    patch_deployment_results (id) {
+        id -> Int4,
+        deployment_id -> Int4,
+        computer_id -> Int4,
+        #[max_length = 100]
+        update_id -> Varchar,
+        #[max_length = 500]
+        update_title -> Nullable<Varchar>,
+        #[max_length = 20]
+        status -> Varchar,
+        started_at -> Nullable<Timestamp>,
+        completed_at -> Nullable<Timestamp>,
+        error_code -> Nullable<Int4>,
+        error_message -> Nullable<Text>,
+        reboot_required -> Nullable<Bool>,
+        rebooted -> Nullable<Bool>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    patch_deployments (id) {
+        id -> Int4,
+        #[max_length = 255]
+        deployment_name -> Varchar,
+        patch_schedule_id -> Nullable<Int4>,
+        #[max_length = 50]
+        target_type -> Varchar,
+        target_ids -> Nullable<Array<Nullable<Int4>>>,
+        update_ids -> Nullable<Array<Nullable<Text>>>,
+        scheduled_at -> Timestamp,
+        started_at -> Nullable<Timestamp>,
+        completed_at -> Nullable<Timestamp>,
+        #[max_length = 20]
+        status -> Nullable<Varchar>,
+        total_targets -> Nullable<Int4>,
+        successful_count -> Nullable<Int4>,
+        failed_count -> Nullable<Int4>,
+        pending_count -> Nullable<Int4>,
+        created_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    patch_group_members (id) {
+        id -> Int4,
+        patch_group_id -> Int4,
+        computer_id -> Int4,
+        added_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    patch_groups (id) {
+        id -> Int4,
+        #[max_length = 100]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        auto_approve -> Nullable<Bool>,
+        test_group -> Nullable<Bool>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    patch_schedules (id) {
+        id -> Int4,
+        #[max_length = 100]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        #[max_length = 50]
+        target_type -> Varchar,
+        target_id -> Nullable<Int4>,
+        #[max_length = 20]
+        patch_day -> Nullable<Varchar>,
+        maintenance_window_start -> Nullable<Time>,
+        maintenance_window_end -> Nullable<Time>,
+        auto_approve_critical -> Nullable<Bool>,
+        auto_approve_security -> Nullable<Bool>,
+        auto_reboot -> Nullable<Bool>,
+        reboot_delay_minutes -> Nullable<Int4>,
+        notification_before_minutes -> Nullable<Int4>,
+        is_active -> Nullable<Bool>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     positions (id) {
         id -> Int4,
         #[max_length = 100]
@@ -1467,6 +1816,11 @@ diesel::table! {
         estimated_time -> Nullable<Int4>,
         actual_time -> Nullable<Int4>,
         parent_request_id -> Nullable<Int4>,
+        #[max_length = 50]
+        recurring_schedule -> Nullable<Varchar>,
+        knowledge_base_article_id -> Nullable<Int4>,
+        satisfaction_rating -> Nullable<Int4>,
+        satisfaction_comment -> Nullable<Text>,
     }
 }
 
@@ -1489,6 +1843,39 @@ diesel::table! {
         run_as_user -> Nullable<Varchar>,
         is_enabled -> Nullable<Bool>,
         last_checked -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    security_incidents (id) {
+        id -> Int4,
+        #[max_length = 50]
+        incident_number -> Varchar,
+        #[max_length = 50]
+        incident_type -> Varchar,
+        #[max_length = 20]
+        severity -> Varchar,
+        computer_id -> Nullable<Int4>,
+        employee_id -> Nullable<Int4>,
+        detected_at -> Timestamp,
+        #[max_length = 100]
+        detected_by -> Nullable<Varchar>,
+        resolved_at -> Nullable<Timestamp>,
+        resolved_by -> Nullable<Uuid>,
+        #[max_length = 255]
+        title -> Varchar,
+        description -> Text,
+        actions_taken -> Nullable<Text>,
+        root_cause -> Nullable<Text>,
+        #[max_length = 20]
+        status -> Nullable<Varchar>,
+        #[max_length = 20]
+        impact_level -> Nullable<Varchar>,
+        affected_systems -> Nullable<Text>,
+        data_compromised -> Nullable<Bool>,
+        reported_to_authorities -> Nullable<Bool>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -1644,6 +2031,75 @@ diesel::table! {
 }
 
 diesel::table! {
+    vpn_access (id) {
+        id -> Int4,
+        employee_id -> Int4,
+        vpn_config_id -> Int4,
+        granted_at -> Date,
+        expires_at -> Nullable<Date>,
+        granted_by -> Nullable<Uuid>,
+        revoked_at -> Nullable<Date>,
+        revoked_by -> Nullable<Uuid>,
+        revoke_reason -> Nullable<Text>,
+        is_active -> Nullable<Bool>,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    vpn_configurations (id) {
+        id -> Int4,
+        #[max_length = 100]
+        name -> Varchar,
+        #[max_length = 255]
+        server_address -> Varchar,
+        #[max_length = 50]
+        protocol -> Varchar,
+        port -> Nullable<Int4>,
+        #[max_length = 50]
+        encryption -> Nullable<Varchar>,
+        #[max_length = 50]
+        authentication_method -> Nullable<Varchar>,
+        split_tunneling -> Nullable<Bool>,
+        dns_servers -> Nullable<Text>,
+        is_active -> Nullable<Bool>,
+        max_concurrent_connections -> Nullable<Int4>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    vpn_connections (id) {
+        id -> Int4,
+        employee_id -> Int4,
+        #[max_length = 255]
+        username -> Varchar,
+        #[max_length = 255]
+        connection_name -> Nullable<Varchar>,
+        #[max_length = 255]
+        vpn_server -> Nullable<Varchar>,
+        #[max_length = 50]
+        vpn_protocol -> Nullable<Varchar>,
+        #[max_length = 45]
+        client_ip -> Nullable<Varchar>,
+        #[max_length = 45]
+        assigned_ip -> Nullable<Varchar>,
+        connected_at -> Timestamp,
+        disconnected_at -> Nullable<Timestamp>,
+        session_duration_seconds -> Nullable<Int4>,
+        bytes_sent -> Nullable<Int8>,
+        bytes_received -> Nullable<Int8>,
+        #[max_length = 100]
+        disconnect_reason -> Nullable<Varchar>,
+        #[max_length = 20]
+        status -> Nullable<Varchar>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     windows_events (id) {
         id -> Int4,
         computer_id -> Int4,
@@ -1736,6 +2192,28 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    work_time_tracking (id) {
+        id -> Int4,
+        request_id -> Nullable<Int4>,
+        employee_id -> Int4,
+        #[max_length = 50]
+        work_type -> Varchar,
+        started_at -> Timestamp,
+        ended_at -> Nullable<Timestamp>,
+        duration_minutes -> Nullable<Int4>,
+        work_description -> Text,
+        is_billable -> Nullable<Bool>,
+        hourly_rate -> Nullable<Numeric>,
+        total_cost -> Nullable<Numeric>,
+        approved_by -> Nullable<Uuid>,
+        approved_at -> Nullable<Timestamp>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(activity_log -> users (user_id));
 diesel::joinable!(ad_group_memberships -> ad_groups (ad_group_id));
 diesel::joinable!(ad_group_memberships -> employees (employee_id));
@@ -1744,9 +2222,13 @@ diesel::joinable!(alert_history -> users (acknowledged_by));
 diesel::joinable!(alert_rules -> users (created_by));
 diesel::joinable!(alert_subscriptions -> alert_rules (alert_rule_id));
 diesel::joinable!(alert_subscriptions -> users (user_id));
+diesel::joinable!(antivirus_scan_history -> computers (computer_id));
+diesel::joinable!(antivirus_threats -> computers (computer_id));
 diesel::joinable!(api_tokens -> users (user_id));
 diesel::joinable!(backup_history -> backup_jobs (job_id));
 diesel::joinable!(backup_jobs -> backup_policies (policy_id));
+diesel::joinable!(certificate_renewals -> users (renewed_by));
+diesel::joinable!(certificates -> computers (computer_id));
 diesel::joinable!(checklist_items -> checklists (checklist_id));
 diesel::joinable!(checklist_items -> users (completed_by));
 diesel::joinable!(checklist_template_items -> checklist_templates (template_id));
@@ -1755,6 +2237,7 @@ diesel::joinable!(checklists -> checklist_templates (template_id));
 diesel::joinable!(checklists -> employees (assigned_to));
 diesel::joinable!(component_history -> computers (computer_id));
 diesel::joinable!(component_history -> users (changed_by));
+diesel::joinable!(computer_antivirus -> computers (computer_id));
 diesel::joinable!(computer_gpo_applications -> computers (computer_id));
 diesel::joinable!(computer_gpo_applications -> group_policies (gpo_id));
 diesel::joinable!(computer_gpus -> computers (computer_id));
@@ -1784,6 +2267,8 @@ diesel::joinable!(document_versions -> documents (document_id));
 diesel::joinable!(document_versions -> users (uploaded_by));
 diesel::joinable!(documents -> document_categories (category_id));
 diesel::joinable!(documents -> users (uploaded_by));
+diesel::joinable!(domain_account_history -> domain_accounts (account_id));
+diesel::joinable!(domain_accounts -> employees (employee_id));
 diesel::joinable!(employees -> departments (department_id));
 diesel::joinable!(employees -> locations (location_id));
 diesel::joinable!(employees -> positions (position_id));
@@ -1791,6 +2276,12 @@ diesel::joinable!(equipment -> employees (employee_id));
 diesel::joinable!(equipment -> hardware_types (type_id));
 diesel::joinable!(equipment -> locations (location_id));
 diesel::joinable!(firewall_rules -> computers (computer_id));
+diesel::joinable!(incident_evidence -> security_incidents (incident_id));
+diesel::joinable!(incident_evidence -> users (collected_by));
+diesel::joinable!(inventory_audit_items -> inventory_audits (audit_id));
+diesel::joinable!(inventory_audit_items -> users (checked_by));
+diesel::joinable!(inventory_audits -> departments (department_id));
+diesel::joinable!(inventory_audits -> users (audited_by));
 diesel::joinable!(ip_addresses -> network_segments (network_segment_id));
 diesel::joinable!(kb_article_attachments -> knowledge_base_articles (article_id));
 diesel::joinable!(kb_article_attachments -> users (uploaded_by));
@@ -1813,6 +2304,12 @@ diesel::joinable!(network_scans -> network_segments (network_segment_id));
 diesel::joinable!(network_scans -> users (initiated_by));
 diesel::joinable!(notes -> users (created_by));
 diesel::joinable!(notifications -> users (user_id));
+diesel::joinable!(patch_deployment_results -> computers (computer_id));
+diesel::joinable!(patch_deployment_results -> patch_deployments (deployment_id));
+diesel::joinable!(patch_deployments -> patch_schedules (patch_schedule_id));
+diesel::joinable!(patch_deployments -> users (created_by));
+diesel::joinable!(patch_group_members -> computers (computer_id));
+diesel::joinable!(patch_group_members -> patch_groups (patch_group_id));
 diesel::joinable!(positions -> departments (department_id));
 diesel::joinable!(project_assets -> projects (project_id));
 diesel::joinable!(project_members -> employees (employee_id));
@@ -1839,6 +2336,9 @@ diesel::joinable!(request_tag_relations -> users (added_by));
 diesel::joinable!(requests -> computers (computer_id));
 diesel::joinable!(requests -> equipment (equipment_id));
 diesel::joinable!(scheduled_tasks -> computers (computer_id));
+diesel::joinable!(security_incidents -> computers (computer_id));
+diesel::joinable!(security_incidents -> employees (employee_id));
+diesel::joinable!(security_incidents -> users (resolved_by));
 diesel::joinable!(service_failures -> computers (computer_id));
 diesel::joinable!(share_permissions -> shared_folders (shared_folder_id));
 diesel::joinable!(shared_folders -> computers (computer_id));
@@ -1847,11 +2347,17 @@ diesel::joinable!(software_history -> computers (computer_id));
 diesel::joinable!(software_history -> software_catalog (software_catalog_id));
 diesel::joinable!(software_name_mappings -> software_catalog (software_catalog_id));
 diesel::joinable!(users -> employees (employee_id));
+diesel::joinable!(vpn_access -> employees (employee_id));
+diesel::joinable!(vpn_access -> vpn_configurations (vpn_config_id));
+diesel::joinable!(vpn_connections -> employees (employee_id));
 diesel::joinable!(windows_events -> computers (computer_id));
 diesel::joinable!(windows_features -> computers (computer_id));
 diesel::joinable!(windows_missing_updates -> computers (computer_id));
 diesel::joinable!(windows_services -> computers (computer_id));
 diesel::joinable!(windows_updates -> computers (computer_id));
+diesel::joinable!(work_time_tracking -> employees (employee_id));
+diesel::joinable!(work_time_tracking -> requests (request_id));
+diesel::joinable!(work_time_tracking -> users (approved_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     activity_log,
@@ -1861,15 +2367,20 @@ diesel::allow_tables_to_appear_in_same_query!(
     alert_history,
     alert_rules,
     alert_subscriptions,
+    antivirus_scan_history,
+    antivirus_threats,
     api_tokens,
     backup_history,
     backup_jobs,
     backup_policies,
+    certificate_renewals,
+    certificates,
     checklist_items,
     checklist_template_items,
     checklist_templates,
     checklists,
     component_history,
+    computer_antivirus,
     computer_gpo_applications,
     computer_gpus,
     computer_monitoring,
@@ -1891,11 +2402,16 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_permissions,
     document_versions,
     documents,
+    domain_account_history,
+    domain_accounts,
     employees,
     equipment,
     firewall_rules,
     group_policies,
     hardware_types,
+    incident_evidence,
+    inventory_audit_items,
+    inventory_audits,
     ip_addresses,
     kb_article_attachments,
     kb_article_requests,
@@ -1912,6 +2428,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     network_segments,
     notes,
     notifications,
+    patch_deployment_results,
+    patch_deployments,
+    patch_group_members,
+    patch_groups,
+    patch_schedules,
     positions,
     project_assets,
     project_members,
@@ -1928,6 +2449,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     request_tags,
     requests,
     scheduled_tasks,
+    security_incidents,
     service_failures,
     share_permissions,
     shared_folders,
@@ -1936,9 +2458,13 @@ diesel::allow_tables_to_appear_in_same_query!(
     software_name_mappings,
     users,
     vendors,
+    vpn_access,
+    vpn_configurations,
+    vpn_connections,
     windows_events,
     windows_features,
     windows_missing_updates,
     windows_services,
     windows_updates,
+    work_time_tracking,
 );
