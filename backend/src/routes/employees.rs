@@ -1,18 +1,14 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use poem_openapi::{ApiResponse, Object, OpenApi, param::Path, param::Query, payload::Json};
 use serde::{Deserialize, Serialize};
 
 use crate::config::database::Pool;
 use crate::middleware;
-use crate::models::employee::{
-    Department, DepartmentResponse, DepartmentWithCounts, Employee, EmployeeResponse,
-    NewDepartment, NewEmployeeRequest, NewPosition, Position, PositionResponse,
-    PositionWithDetails, UpdateDepartment, UpdateEmployeeRequest, UpdatePosition,
-};
-use crate::models::schema::{departments, employees, positions};
+use crate::models::employee::{Employee, EmployeeResponse, NewEmployeeRequest, UpdateEmployeeRequest};
+use crate::repositories::employee_repository::EmployeeRepository;
 use crate::routes::api::ApiTags;
 use crate::services::activity_log_service::ActivityLogService;
+use crate::utils::change_tracker::ChangeTracker;
+use crate::utils::error::{AppError, ErrorResponse};
 
 // ============================================================================
 // Request/Response Types
@@ -35,13 +31,6 @@ pub struct BulkDeleteRequest {
 pub struct BulkDeleteResponse {
     pub deleted_count: usize,
     pub failed_ids: Vec<i32>,
-}
-
-#[derive(Serialize, Object)]
-#[oai(rename = "EmployeeErrorResponse")]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
 }
 
 #[derive(ApiResponse)]
@@ -102,65 +91,20 @@ pub enum BulkDeleteEmployeesResponse {
     InternalError(Json<ErrorResponse>),
 }
 
-#[derive(ApiResponse)]
-pub enum DepartmentsListResponse {
-    #[oai(status = 200)]
-    Ok(Json<Vec<DepartmentResponse>>),
-    #[oai(status = 500)]
-    InternalError(Json<ErrorResponse>),
-}
-
-#[derive(ApiResponse)]
-pub enum DepartmentDetailResponse {
-    #[oai(status = 200)]
-    Ok(Json<DepartmentResponse>),
-    #[oai(status = 201)]
-    Created(Json<DepartmentResponse>),
-    #[oai(status = 404)]
-    NotFound(Json<ErrorResponse>),
-    #[oai(status = 400)]
-    BadRequest(Json<ErrorResponse>),
-    #[oai(status = 500)]
-    InternalError(Json<ErrorResponse>),
-}
-
-#[derive(ApiResponse)]
-pub enum PositionsListResponse {
-    #[oai(status = 200)]
-    Ok(Json<Vec<PositionResponse>>),
-    #[oai(status = 500)]
-    InternalError(Json<ErrorResponse>),
-}
-
-#[derive(ApiResponse)]
-pub enum PositionDetailResponse {
-    #[oai(status = 200)]
-    Ok(Json<PositionResponse>),
-    #[oai(status = 201)]
-    Created(Json<PositionResponse>),
-    #[oai(status = 404)]
-    NotFound(Json<ErrorResponse>),
-    #[oai(status = 400)]
-    BadRequest(Json<ErrorResponse>),
-    #[oai(status = 500)]
-    InternalError(Json<ErrorResponse>),
-}
-
 // ============================================================================
 // API Implementation
 // ============================================================================
 
 pub struct EmployeesApi {
-    db_pool: Pool,
+    repository: EmployeeRepository,
     activity_log: ActivityLogService,
 }
 
 impl EmployeesApi {
     pub fn new(db_pool: Pool) -> Self {
-        let activity_log = ActivityLogService::new(db_pool.clone());
         Self {
-            db_pool,
-            activity_log,
+            repository: EmployeeRepository::new(db_pool.clone()),
+            activity_log: ActivityLogService::new(db_pool),
         }
     }
 
@@ -205,126 +149,36 @@ impl EmployeesApi {
     ) -> EmployeesListResponse {
         let page = page.unwrap_or(1).max(1);
         let per_page = per_page.unwrap_or(20).min(100);
-        let offset = (page - 1) * per_page;
 
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeesListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
+        match self.repository.list_employees(page, per_page, status, department_id).await {
+            Ok((results, total)) => {
+                let employees_list = results
+                    .into_iter()
+                    .map(|(emp, pos_name, dept_name)| Self::employee_to_response(emp, pos_name, dept_name))
+                    .collect();
+
+                EmployeesListResponse::Ok(Json(EmployeeListResponse {
+                    employees: employees_list,
+                    total,
+                    page,
+                    per_page,
+                }))
             }
-        };
-
-        // Build base query for counting
-        let mut count_query = employees::table.into_boxed();
-
-        if let Some(ref s) = status {
-            count_query = count_query.filter(employees::status.eq(s));
+            Err(e) => EmployeesListResponse::InternalError(Json(e.to_error_response())),
         }
-
-        if let Some(dept_id) = department_id {
-            count_query = count_query.filter(employees::department_id.eq(dept_id));
-        }
-
-        // Get total count
-        let total = match count_query.count().get_result::<i64>(&mut conn).await {
-            Ok(count) => count,
-            Err(e) => {
-                return EmployeesListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to count employees: {}", e),
-                }));
-            }
-        };
-
-        // Build query for data retrieval
-        let mut query = employees::table
-            .left_join(positions::table)
-            .left_join(departments::table)
-            .into_boxed();
-
-        if let Some(s) = status {
-            query = query.filter(employees::status.eq(s));
-        }
-
-        if let Some(dept_id) = department_id {
-            query = query.filter(employees::department_id.eq(dept_id));
-        }
-
-        // Get employees with pagination
-        let results = match query
-            .select((
-                Employee::as_select(),
-                positions::name.nullable(),
-                departments::name.nullable(),
-            ))
-            .order(employees::last_name.asc())
-            .limit(per_page)
-            .offset(offset)
-            .load::<(Employee, Option<String>, Option<String>)>(&mut conn)
-            .await
-        {
-            Ok(results) => results,
-            Err(e) => {
-                return EmployeesListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to load employees: {}", e),
-                }));
-            }
-        };
-
-        let employees_list = results
-            .into_iter()
-            .map(|(emp, pos_name, dept_name)| Self::employee_to_response(emp, pos_name, dept_name))
-            .collect();
-
-        EmployeesListResponse::Ok(Json(EmployeeListResponse {
-            employees: employees_list,
-            total,
-            page,
-            per_page,
-        }))
     }
 
     /// Get employee by ID
     #[oai(path = "/:id", method = "get")]
     async fn get_employee(&self, Path(id): Path<i32>) -> EmployeeDetailResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeeDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
+        match self.repository.get_employee_by_id(id).await {
+            Ok((employee, pos_name, dept_name)) => {
+                EmployeeDetailResponse::Ok(Json(Self::employee_to_response(employee, pos_name, dept_name)))
             }
-        };
-
-        let result = employees::table
-            .find(id)
-            .left_join(positions::table)
-            .left_join(departments::table)
-            .select((
-                Employee::as_select(),
-                positions::name.nullable(),
-                departments::name.nullable(),
-            ))
-            .first::<(Employee, Option<String>, Option<String>)>(&mut conn)
-            .await;
-
-        match result {
-            Ok((employee, pos_name, dept_name)) => EmployeeDetailResponse::Ok(Json(
-                Self::employee_to_response(employee, pos_name, dept_name),
-            )),
-            Err(diesel::result::Error::NotFound) => EmployeeDetailResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Employee with id {} not found", id),
-            })),
-            Err(e) => EmployeeDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to get employee: {}", e),
-            })),
+            Err(e) => match e {
+                AppError::NotFound(_) => EmployeeDetailResponse::NotFound(Json(e.to_error_response())),
+                _ => EmployeeDetailResponse::InternalError(Json(e.to_error_response())),
+            },
         }
     }
 
@@ -338,29 +192,13 @@ impl EmployeesApi {
         let new_employee = match req.to_new_employee() {
             Ok(emp) => emp,
             Err(e) => {
-                return EmployeeCreateResponse::BadRequest(Json(ErrorResponse {
-                    error: "validation_error".to_string(),
-                    message: e,
-                }));
-            }
-        };
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeeCreateResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
+                let err = AppError::ValidationError(e);
+                return EmployeeCreateResponse::BadRequest(Json(err.to_error_response()));
             }
         };
 
-        let result = diesel::insert_into(employees::table)
-            .values(&new_employee)
-            .get_result::<Employee>(&mut conn).await;
-
-        match result {
+        match self.repository.create_employee(new_employee).await {
             Ok(employee) => {
-                // Log activity
                 let details = serde_json::json!({
                     "employee_name": employee.full_name(),
                     "email": employee.email,
@@ -370,47 +208,23 @@ impl EmployeesApi {
                 
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
-                    auth.0.user_id(), // User ID from JWT
+                    auth.0.user_id(),
                     "created",
                     "employee",
                     employee.id,
                     details,
                 );
 
-                // Get position and department names
-                let (pos_name, dept_name) =
-                    if employee.position_id.is_some() || employee.department_id.is_some() {
-                        let pos = if let Some(pid) = employee.position_id {
-                            positions::table
-                                .find(pid)
-                                .select(positions::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-                        let dept = if let Some(did) = employee.department_id {
-                            departments::table
-                                .find(did)
-                                .select(departments::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-                        (pos, dept)
-                    } else {
-                        (None, None)
-                    };
+                let (pos_name, dept_name) = self.repository
+                    .get_position_and_department_names(employee.position_id, employee.department_id)
+                    .await
+                    .unwrap_or((None, None));
 
                 EmployeeCreateResponse::Created(Json(Self::employee_to_response(
                     employee, pos_name, dept_name,
                 )))
             }
-            Err(e) => EmployeeCreateResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to create employee: {}", e),
-            })),
+            Err(e) => EmployeeCreateResponse::InternalError(Json(e.to_error_response())),
         }
     }
 
@@ -422,167 +236,42 @@ impl EmployeesApi {
         Path(id): Path<i32>,
         Json(req): Json<UpdateEmployeeRequest>,
     ) -> EmployeeUpdateResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
+        let old_employee = match self.repository.get_employee_by_id(id).await {
+            Ok((emp, _, _)) => emp,
             Err(e) => {
-                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        // Get old values before update
-        let old_employee = match employees::table.find(id).first::<Employee>(&mut conn).await {
-            Ok(emp) => emp,
-            Err(diesel::result::Error::NotFound) => {
-                return EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Employee with id {} not found", id),
-                }));
-            }
-            Err(e) => {
-                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get employee: {}", e),
-                }));
+                return match e {
+                    AppError::NotFound(_) => EmployeeUpdateResponse::NotFound(Json(e.to_error_response())),
+                    _ => EmployeeUpdateResponse::InternalError(Json(e.to_error_response())),
+                };
             }
         };
 
         let update_data = match req.to_update_employee() {
             Ok(data) => data,
             Err(e) => {
-                tracing::error!("Validation error in update_employee: {}", e);
-                return EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                    error: "validation_error".to_string(),
-                    message: e,
-                }));
+                let err = AppError::ValidationError(e);
+                return EmployeeUpdateResponse::InternalError(Json(err.to_error_response()));
             }
         };
 
-        let result = diesel::update(employees::table.find(id))
-            .set(&update_data)
-            .get_result::<Employee>(&mut conn).await;
-
-        match result {
+        match self.repository.update_employee(id, update_data).await {
             Ok(employee) => {
-                // Log activity with old and new values
-                let mut changes = serde_json::Map::new();
+                let mut tracker = ChangeTracker::new();
+                tracker.track_string("first_name", &old_employee.first_name, &employee.first_name);
+                tracker.track_string("last_name", &old_employee.last_name, &employee.last_name);
+                tracker.track_option_string("middle_name", &old_employee.middle_name, &employee.middle_name);
+                tracker.track_option_string("email", &old_employee.email, &employee.email);
+                tracker.track_option_string("phone", &old_employee.phone, &employee.phone);
+                tracker.track_string("status", &old_employee.status, &employee.status);
+                tracker.track_option_i32("position_id", &old_employee.position_id, &employee.position_id);
+                tracker.track_option_i32("department_id", &old_employee.department_id, &employee.department_id);
 
-                if old_employee.first_name != employee.first_name {
-                    changes.insert(
-                        "first_name".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.first_name,
-                            "new": employee.first_name
-                        }),
-                    );
-                }
-                if old_employee.last_name != employee.last_name {
-                    changes.insert(
-                        "last_name".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.last_name,
-                            "new": employee.last_name
-                        }),
-                    );
-                }
-                if old_employee.middle_name != employee.middle_name {
-                    changes.insert(
-                        "middle_name".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.middle_name,
-                            "new": employee.middle_name
-                        }),
-                    );
-                }
-                if old_employee.email != employee.email {
-                    changes.insert(
-                        "email".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.email,
-                            "new": employee.email
-                        }),
-                    );
-                }
-                if old_employee.phone != employee.phone {
-                    changes.insert(
-                        "phone".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.phone,
-                            "new": employee.phone
-                        }),
-                    );
-                }
-                if old_employee.status != employee.status {
-                    changes.insert(
-                        "status".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.status,
-                            "new": employee.status
-                        }),
-                    );
-                }
-                if old_employee.position_id != employee.position_id {
-                    changes.insert(
-                        "position_id".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.position_id,
-                            "new": employee.position_id
-                        }),
-                    );
-                }
-                if old_employee.department_id != employee.department_id {
-                    changes.insert(
-                        "department_id".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.department_id,
-                            "new": employee.department_id
-                        }),
-                    );
-                }
-                if old_employee.hire_date != employee.hire_date {
-                    changes.insert(
-                        "hire_date".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.hire_date.map(|d| d.to_string()),
-                            "new": employee.hire_date.map(|d| d.to_string())
-                        }),
-                    );
-                }
-                if old_employee.termination_date != employee.termination_date {
-                    changes.insert(
-                        "termination_date".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.termination_date.map(|d| d.to_string()),
-                            "new": employee.termination_date.map(|d| d.to_string())
-                        }),
-                    );
-                }
-                if old_employee.ad_username != employee.ad_username {
-                    changes.insert(
-                        "ad_username".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.ad_username,
-                            "new": employee.ad_username
-                        }),
-                    );
-                }
-                if old_employee.notes != employee.notes {
-                    changes.insert(
-                        "notes".to_string(),
-                        serde_json::json!({
-                            "old": old_employee.notes,
-                            "new": employee.notes
-                        }),
-                    );
-                }
-
-                if !changes.is_empty() {
+                if tracker.has_changes() {
                     let details = serde_json::json!({
                         "employee_name": employee.full_name(),
-                        "changes": changes,
+                        "changes": tracker.into_json(),
                     });
+                    
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -593,46 +282,16 @@ impl EmployeesApi {
                     );
                 }
 
-                let (pos_name, dept_name) =
-                    if employee.position_id.is_some() || employee.department_id.is_some() {
-                        let pos = if let Some(pid) = employee.position_id {
-                            positions::table
-                                .find(pid)
-                                .select(positions::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-                        let dept = if let Some(did) = employee.department_id {
-                            departments::table
-                                .find(did)
-                                .select(departments::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-                        (pos, dept)
-                    } else {
-                        (None, None)
-                    };
+                let (pos_name, dept_name) = self.repository
+                    .get_position_and_department_names(employee.position_id, employee.department_id)
+                    .await
+                    .unwrap_or((None, None));
 
                 EmployeeUpdateResponse::Ok(Json(Self::employee_to_response(
                     employee, pos_name, dept_name,
                 )))
             }
-            Err(diesel::result::Error::NotFound) => EmployeeUpdateResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Employee with id {} not found", id),
-            })),
-            Err(e) => {
-                tracing::error!("Database error in update_employee: {:?}", e);
-                EmployeeUpdateResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to update employee: {}", e),
-                }))
-            }
+            Err(e) => EmployeeUpdateResponse::InternalError(Json(e.to_error_response())),
         }
     }
 
@@ -643,64 +302,15 @@ impl EmployeesApi {
         auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
+        let employee_info = self.repository.get_employee_info_for_log(id).await.ok().flatten();
+
+        match self.repository.delete_employee(id).await {
+            Ok(0) => {
+                let err = AppError::NotFound(format!("Employee with id {} not found", id));
+                EmployeeDeleteResponse::NotFound(Json(err.to_error_response()))
             }
-        };
-
-        // Get full employee info before deletion
-        let employee_info = employees::table
-            .find(id)
-            .left_join(positions::table)
-            .left_join(departments::table)
-            .select((
-                employees::first_name,
-                employees::last_name,
-                employees::middle_name,
-                employees::email,
-                employees::phone,
-                employees::status,
-                positions::name.nullable(),
-                departments::name.nullable(),
-            ))
-            .first::<(
-                String,
-                String,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-                String,
-                Option<String>,
-                Option<String>,
-            )>(&mut conn)
-            .await
-            .ok();
-
-        let result = diesel::delete(employees::table.find(id)).execute(&mut conn).await;
-
-        match result {
-            Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Employee with id {} not found", id),
-            })),
             Ok(_) => {
-                // Log activity with full employee info
-                if let Some((
-                    first_name,
-                    last_name,
-                    middle_name,
-                    email,
-                    phone,
-                    status,
-                    position,
-                    department,
-                )) = employee_info
-                {
+                if let Some((first_name, last_name, middle_name, email, phone, status, position, department)) = employee_info {
                     let full_name = if let Some(mn) = middle_name {
                         format!("{} {} {}", last_name, first_name, mn)
                     } else {
@@ -715,16 +325,13 @@ impl EmployeesApi {
                         "position": position,
                         "department": department,
                     });
+                    
                     use crate::middleware::auth::ClaimsExt;
-                    self.activity_log
-                        .log_with_details_async(auth.0.user_id(), "deleted", "employee", id, details);
+                    self.activity_log.log_with_details_async(auth.0.user_id(), "deleted", "employee", id, details);
                 }
                 EmployeeDeleteResponse::NoContent
             }
-            Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to delete employee: {}", e),
-            })),
+            Err(e) => EmployeeDeleteResponse::InternalError(Json(e.to_error_response())),
         }
     }
 
@@ -736,35 +343,21 @@ impl EmployeesApi {
         Json(req): Json<BulkDeleteRequest>,
     ) -> BulkDeleteEmployeesResponse {
         if req.ids.is_empty() {
-            return BulkDeleteEmployeesResponse::BadRequest(Json(ErrorResponse {
-                error: "validation_error".to_string(),
-                message: "No employee IDs provided".to_string(),
-            }));
+            let err = AppError::ValidationError("No employee IDs provided".to_string());
+            return BulkDeleteEmployeesResponse::BadRequest(Json(err.to_error_response()));
         }
-
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return BulkDeleteEmployeesResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
 
         let mut deleted_count = 0;
         let mut failed_ids = Vec::new();
 
         for id in req.ids {
-            match diesel::delete(employees::table.find(id)).execute(&mut conn).await {
+            match self.repository.delete_employee(id).await {
                 Ok(count) if count > 0 => {
                     deleted_count += 1;
-                    // Log activity
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_async(auth.0.user_id(), "deleted", "employee", id);
                 }
-                Ok(_) => failed_ids.push(id),
-                Err(_) => failed_ids.push(id),
+                _ => failed_ids.push(id),
             }
         }
 
@@ -773,544 +366,4 @@ impl EmployeesApi {
             failed_ids,
         }))
     }
-
-    /// Get all departments
-    #[oai(path = "/departments", method = "get")]
-    async fn list_departments(&self) -> DepartmentsListResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return DepartmentsListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        let query = "SELECT * FROM v_departments_with_counts ORDER BY name";
-
-        match diesel::sql_query(query).load::<DepartmentWithCounts>(&mut conn).await {
-            Ok(depts) => {
-                let responses: Vec<DepartmentResponse> = depts
-                    .into_iter()
-                    .map(|dept| DepartmentResponse {
-                        id: dept.id,
-                        name: dept.name,
-                        description: dept.description,
-                        employee_count: dept.employee_count,
-                        position_count: dept.position_count,
-                        created_at: dept.created_at.to_string(),
-                        updated_at: dept.updated_at.to_string(),
-                    })
-                    .collect();
-
-                DepartmentsListResponse::Ok(Json(responses))
-            }
-            Err(e) => DepartmentsListResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to load departments: {}", e),
-            })),
-        }
-    }
-
-    /// Create new department
-    #[oai(path = "/departments", method = "post")]
-    async fn create_department(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Json(new_dept): Json<NewDepartment>,
-    ) -> DepartmentDetailResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return DepartmentDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        match diesel::insert_into(departments::table)
-            .values(&new_dept)
-            .get_result::<Department>(&mut conn).await
-        {
-            Ok(dept) => {
-                // Log activity
-                let details = serde_json::json!({
-                    "department_name": dept.name,
-                    "description": dept.description,
-                });
-                use crate::middleware::auth::ClaimsExt;
-                self.activity_log.log_with_details_async(
-                    auth.0.user_id(),
-                    "created",
-                    "department",
-                    dept.id,
-                    details,
-                );
-
-                DepartmentDetailResponse::Created(Json(DepartmentResponse {
-                    id: dept.id,
-                    name: dept.name,
-                    description: dept.description,
-                    employee_count: 0,
-                    position_count: 0,
-                    created_at: dept.created_at.to_string(),
-                    updated_at: dept.updated_at.to_string(),
-                }))
-            }
-            Err(e) => DepartmentDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to create department: {}", e),
-            })),
-        }
-    }
-
-    /// Update department
-    #[oai(path = "/departments/:id", method = "put")]
-    async fn update_department(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Path(id): Path<i32>,
-        Json(update_data): Json<UpdateDepartment>,
-    ) -> DepartmentDetailResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return DepartmentDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        // Проверяем существование
-        let old_dept = match departments::table.find(id).first::<Department>(&mut conn).await {
-            Ok(dept) => dept,
-            Err(diesel::result::Error::NotFound) => {
-                return DepartmentDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Department with id {} not found", id),
-                }));
-            }
-            Err(e) => {
-                return DepartmentDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to find department: {}", e),
-                }));
-            }
-        };
-
-        match diesel::update(departments::table.find(id))
-            .set(&update_data)
-            .get_result::<Department>(&mut conn).await
-        {
-            Ok(dept) => {
-                // Log changes
-                let mut changes = serde_json::Map::new();
-                if let Some(ref new_name) = update_data.name {
-                    if &old_dept.name != new_name {
-                        changes.insert(
-                            "name".to_string(),
-                            serde_json::json!({
-                                "old": old_dept.name,
-                                "new": new_name
-                            }),
-                        );
-                    }
-                }
-                if update_data.description != old_dept.description {
-                    changes.insert(
-                        "description".to_string(),
-                        serde_json::json!({
-                            "old": old_dept.description,
-                            "new": update_data.description
-                        }),
-                    );
-                }
-
-                if !changes.is_empty() {
-                    let details = serde_json::json!({
-                        "department_name": dept.name,
-                        "changes": changes,
-                    });
-                    use crate::middleware::auth::ClaimsExt;
-                    self.activity_log.log_with_details_async(
-                        auth.0.user_id(),
-                        "updated",
-                        "department",
-                        dept.id,
-                        details,
-                    );
-                }
-
-                let employee_count = employees::table
-                    .filter(employees::department_id.eq(dept.id))
-                    .filter(employees::status.eq("active"))
-                    .count()
-                    .get_result::<i64>(&mut conn).await
-                    .unwrap_or(0);
-
-                let position_count = positions::table
-                    .filter(positions::department_id.eq(dept.id))
-                    .count()
-                    .get_result::<i64>(&mut conn).await
-                    .unwrap_or(0);
-
-                DepartmentDetailResponse::Ok(Json(DepartmentResponse {
-                    id: dept.id,
-                    name: dept.name,
-                    description: dept.description,
-                    employee_count,
-                    position_count,
-                    created_at: dept.created_at.to_string(),
-                    updated_at: dept.updated_at.to_string(),
-                }))
-            }
-            Err(e) => DepartmentDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to update department: {}", e),
-            })),
-        }
-    }
-
-    /// Delete department
-    #[oai(path = "/departments/:id", method = "delete")]
-    async fn delete_department(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Path(id): Path<i32>,
-    ) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        // Get department name before deletion
-        let dept_name = departments::table
-            .find(id)
-            .select(departments::name)
-            .first::<String>(&mut conn).await
-            .ok();
-
-        let result = diesel::delete(departments::table.find(id)).execute(&mut conn).await;
-
-        match result {
-            Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Department with id {} not found", id),
-            })),
-            Ok(_) => {
-                // Log activity
-                if let Some(name) = dept_name {
-                    let details = serde_json::json!({ "department_name": name });
-                    use crate::middleware::auth::ClaimsExt;
-                    self.activity_log.log_with_details_async(
-                        auth.0.user_id(),
-                        "deleted",
-                        "department",
-                        id,
-                        details,
-                    );
-                }
-                EmployeeDeleteResponse::NoContent
-            }
-            Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to delete department: {}", e),
-            })),
-        }
-    }
-
-    /// Create new position
-    #[oai(path = "/positions", method = "post")]
-    async fn create_position(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Json(new_pos): Json<NewPosition>,
-    ) -> PositionDetailResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return PositionDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        if let Some(dept_id) = new_pos.department_id {
-            let exists = departments::table
-                .find(dept_id)
-                .select(diesel::dsl::count(departments::id))
-                .first::<i64>(&mut conn).await
-                .unwrap_or(0)
-                > 0;
-
-            if !exists {
-                return PositionDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Department with id {} not found", dept_id),
-                }));
-            }
-        }
-
-        match diesel::insert_into(positions::table)
-            .values(&new_pos)
-            .get_result::<Position>(&mut conn).await
-        {
-            Ok(pos) => {
-                // Log activity
-                let details = serde_json::json!({
-                    "position_name": pos.name,
-                    "department_id": pos.department_id,
-                });
-                use crate::middleware::auth::ClaimsExt;
-                self.activity_log
-                    .log_with_details_async(auth.0.user_id(), "created", "position", pos.id, details);
-
-                let department_name = if let Some(dept_id) = pos.department_id {
-                            departments::table
-                                .find(dept_id)
-                                .select(departments::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-
-                PositionDetailResponse::Created(Json(PositionResponse {
-                    id: pos.id,
-                    name: pos.name,
-                    department_id: pos.department_id,
-                    department_name,
-                    employee_count: 0,
-                    created_at: pos.created_at.to_string(),
-                    updated_at: pos.updated_at.to_string(),
-                }))
-            }
-            Err(e) => PositionDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to create position: {}", e),
-            })),
-        }
-    }
-
-    /// Update position
-    #[oai(path = "/positions/:id", method = "put")]
-    async fn update_position(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Path(id): Path<i32>,
-        Json(update_data): Json<UpdatePosition>,
-    ) -> PositionDetailResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return PositionDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        // Проверяем существование отдела, если указан
-        if let Some(dept_id) = update_data.department_id {
-            let exists = departments::table
-                .find(dept_id)
-                .select(diesel::dsl::count(departments::id))
-                .first::<i64>(&mut conn).await
-                .unwrap_or(0)
-                > 0;
-
-            if !exists {
-                return PositionDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Department with id {} not found", dept_id),
-                }));
-            }
-        }
-
-        // Получаем старые данные
-        let old_pos = match positions::table.find(id).first::<Position>(&mut conn).await {
-            Ok(pos) => pos,
-            Err(diesel::result::Error::NotFound) => {
-                return PositionDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Position with id {} not found", id),
-                }));
-            }
-            Err(e) => {
-                return PositionDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to find position: {}", e),
-                }));
-            }
-        };
-
-        match diesel::update(positions::table.find(id))
-            .set(&update_data)
-            .get_result::<Position>(&mut conn).await
-        {
-            Ok(pos) => {
-                // Log changes
-                let mut changes = serde_json::Map::new();
-                if let Some(ref new_name) = update_data.name {
-                    if &old_pos.name != new_name {
-                        changes.insert(
-                            "name".to_string(),
-                            serde_json::json!({
-                                "old": old_pos.name,
-                                "new": new_name
-                            }),
-                        );
-                    }
-                }
-                if update_data.department_id != old_pos.department_id {
-                    changes.insert(
-                        "department_id".to_string(),
-                        serde_json::json!({
-                            "old": old_pos.department_id,
-                            "new": update_data.department_id
-                        }),
-                    );
-                }
-
-                if !changes.is_empty() {
-                    let details = serde_json::json!({
-                        "position_name": pos.name,
-                        "changes": changes,
-                    });
-                    use crate::middleware::auth::ClaimsExt;
-                    self.activity_log
-                        .log_with_details_async(auth.0.user_id(), "updated", "position", pos.id, details);
-                }
-
-                let department_name = if let Some(dept_id) = pos.department_id {
-                            departments::table
-                                .find(dept_id)
-                                .select(departments::name)
-                                .first::<String>(&mut conn).await
-                                .ok()
-                        } else {
-                            None
-                        };
-
-                let employee_count = employees::table
-                    .filter(employees::position_id.eq(pos.id))
-                    .filter(employees::status.eq("active"))
-                    .count()
-                    .get_result::<i64>(&mut conn).await
-                    .unwrap_or(0);
-
-                PositionDetailResponse::Ok(Json(PositionResponse {
-                    id: pos.id,
-                    name: pos.name,
-                    department_id: pos.department_id,
-                    department_name,
-                    employee_count,
-                    created_at: pos.created_at.to_string(),
-                    updated_at: pos.updated_at.to_string(),
-                }))
-            }
-            Err(e) => PositionDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to update position: {}", e),
-            })),
-        }
-    }
-
-    /// Delete position
-    #[oai(path = "/positions/:id", method = "delete")]
-    async fn delete_position(
-        &self,
-        auth: middleware::auth::AdminAuth,
-        Path(id): Path<i32>,
-    ) -> EmployeeDeleteResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        // Get position name before deletion
-        let pos_name = positions::table
-            .find(id)
-            .select(positions::name)
-            .first::<String>(&mut conn).await
-            .ok();
-
-        let result = diesel::delete(positions::table.find(id)).execute(&mut conn).await;
-
-        match result {
-            Ok(0) => EmployeeDeleteResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Position with id {} not found", id),
-            })),
-            Ok(_) => {
-                // Log activity
-                if let Some(name) = pos_name {
-                    let details = serde_json::json!({ "position_name": name });
-                    use crate::middleware::auth::ClaimsExt;
-                    self.activity_log
-                        .log_with_details_async(auth.0.user_id(), "deleted", "position", id, details);
-                }
-                EmployeeDeleteResponse::NoContent
-            }
-            Err(e) => EmployeeDeleteResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to delete position: {}", e),
-            })),
-        }
-    }
-
-    /// Get all positions with details
-    #[oai(path = "/positions", method = "get")]
-    async fn list_positions(&self) -> PositionsListResponse {
-        let mut conn = match self.db_pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                return PositionsListResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
-        };
-
-        let query = "SELECT * FROM v_positions_with_details ORDER BY name";
-
-        match diesel::sql_query(query).load::<PositionWithDetails>(&mut conn).await {
-            Ok(positions) => {
-                let responses: Vec<PositionResponse> = positions
-                    .into_iter()
-                    .map(|pos| PositionResponse {
-                        id: pos.id,
-                        name: pos.name,
-                        department_id: pos.department_id,
-                        department_name: pos.department_name,
-                        employee_count: pos.employee_count,
-                        created_at: pos.created_at.to_string(),
-                        updated_at: pos.updated_at.to_string(),
-                    })
-                    .collect();
-
-                PositionsListResponse::Ok(Json(responses))
-            }
-            Err(e) => PositionsListResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to load positions: {}", e),
-            })),
-        }
-    }
 }
-
-

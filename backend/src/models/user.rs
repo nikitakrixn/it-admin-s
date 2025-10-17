@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-// Модель для чтения из БД
+
 #[derive(Queryable, Selectable, Serialize, Clone, Debug)]
 #[diesel(table_name = crate::models::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -18,9 +18,16 @@ pub struct User {
     pub last_login_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub two_factor_enabled: Option<bool>,
+    #[serde(skip_serializing)]
+    pub two_factor_secret: Option<String>,
+    pub password_changed_at: Option<NaiveDateTime>,
+    pub must_change_password: Option<bool>,
+    pub failed_login_attempts: Option<i32>,
+    pub locked_until: Option<NaiveDateTime>,
 }
 
-// Модель для создания нового пользователя
+
 #[derive(Insertable, Deserialize)]
 #[diesel(table_name = crate::models::schema::users)]
 pub struct NewUser {
@@ -30,7 +37,7 @@ pub struct NewUser {
     pub role: String,
 }
 
-// Модель для обновления пользователя
+
 #[derive(AsChangeset, Deserialize)]
 #[diesel(table_name = crate::models::schema::users)]
 pub struct UpdateUser {
@@ -41,7 +48,7 @@ pub struct UpdateUser {
     pub last_login_at: Option<NaiveDateTime>,
 }
 
-// DTO для API ответов (без чувствительных данных)
+
 #[derive(Serialize, Clone, Debug, poem_openapi::Object)]
 pub struct UserResponse {
     pub id: String,

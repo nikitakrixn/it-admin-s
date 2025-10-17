@@ -1,13 +1,8 @@
 use chrono::NaiveDate;
 use diesel::prelude::*;
-use diesel::sql_types::*;
 use serde::{Deserialize, Serialize};
 
-use super::schema::{departments, employees, positions};
-
-// ============================================================================
-// Employee Models
-// ============================================================================
+use super::schema::employees;
 
 #[derive(Queryable, Selectable, Serialize, Clone, Debug, Identifiable)]
 #[diesel(table_name = employees)]
@@ -28,6 +23,10 @@ pub struct Employee {
     pub notes: Option<String>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub location_id: Option<i32>,
+    pub photo_url: Option<String>,
+    pub telegram_username: Option<String>,
+    pub is_vip: Option<bool>,
 }
 
 #[derive(Insertable, Deserialize)]
@@ -44,6 +43,10 @@ pub struct NewEmployee {
     pub hire_date: Option<NaiveDate>,
     pub status: String,
     pub notes: Option<String>,
+    pub location_id: Option<i32>,
+    pub photo_url: Option<String>,
+    pub telegram_username: Option<String>,
+    pub is_vip: Option<bool>,
 }
 
 #[derive(Deserialize, poem_openapi::Object)]
@@ -59,6 +62,10 @@ pub struct NewEmployeeRequest {
     pub hire_date: Option<String>,
     pub status: String,
     pub notes: Option<String>,
+    pub location_id: Option<i32>,
+    pub photo_url: Option<String>,
+    pub telegram_username: Option<String>,
+    pub is_vip: Option<bool>,
 }
 
 impl NewEmployeeRequest {
@@ -84,6 +91,10 @@ impl NewEmployeeRequest {
             hire_date,
             status: self.status,
             notes: self.notes,
+            location_id: self.location_id,
+            photo_url: self.photo_url,
+            telegram_username: self.telegram_username,
+            is_vip: self.is_vip,
         })
     }
 }
@@ -103,6 +114,10 @@ pub struct UpdateEmployee {
     pub termination_date: Option<NaiveDate>,
     pub status: Option<String>,
     pub notes: Option<String>,
+    pub location_id: Option<i32>,
+    pub photo_url: Option<String>,
+    pub telegram_username: Option<String>,
+    pub is_vip: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, poem_openapi::Object)]
@@ -119,6 +134,10 @@ pub struct UpdateEmployeeRequest {
     pub termination_date: Option<String>,
     pub status: Option<String>,
     pub notes: Option<String>,
+    pub location_id: Option<i32>,
+    pub photo_url: Option<String>,
+    pub telegram_username: Option<String>,
+    pub is_vip: Option<bool>,
 }
 
 impl UpdateEmployeeRequest {
@@ -154,6 +173,10 @@ impl UpdateEmployeeRequest {
             termination_date,
             status: self.status,
             notes: self.notes,
+            location_id: self.location_id,
+            photo_url: self.photo_url,
+            telegram_username: self.telegram_username,
+            is_vip: self.is_vip,
         })
     }
 }
@@ -188,124 +211,4 @@ impl Employee {
             format!("{} {}", self.last_name, self.first_name)
         }
     }
-}
-
-// ============================================================================
-// Department Models
-// ============================================================================
-
-#[derive(Queryable, Selectable, Serialize, Clone, Debug, Identifiable)]
-#[diesel(table_name = departments)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Department {
-    pub id: i32,
-    pub name: String,
-    pub description: Option<String>,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-}
-
-#[derive(Insertable, Deserialize, poem_openapi::Object)]
-#[diesel(table_name = departments)]
-pub struct NewDepartment {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-#[derive(AsChangeset, Deserialize, poem_openapi::Object)]
-#[diesel(table_name = departments)]
-pub struct UpdateDepartment {
-    pub name: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Serialize, poem_openapi::Object, Clone)]
-pub struct DepartmentResponse {
-    pub id: i32,
-    pub name: String,
-    pub description: Option<String>,
-    pub employee_count: i64,
-    pub position_count: i64,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(QueryableByName, Serialize, Clone, Debug)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct DepartmentWithCounts {
-    #[diesel(sql_type = Integer)]
-    pub id: i32,
-    #[diesel(sql_type = Text)]
-    pub name: String,
-    #[diesel(sql_type = Nullable<Text>)]
-    pub description: Option<String>,
-    #[diesel(sql_type = Timestamp)]
-    pub created_at: chrono::NaiveDateTime,
-    #[diesel(sql_type = Timestamp)]
-    pub updated_at: chrono::NaiveDateTime,
-    #[diesel(sql_type = BigInt)]
-    pub employee_count: i64,
-    #[diesel(sql_type = BigInt)]
-    pub position_count: i64,
-    #[diesel(sql_type = BigInt)]
-    pub computer_count: i64,
-}
-
-// ============================================================================
-// Position Models
-// ============================================================================
-
-#[derive(Queryable, Selectable, Serialize, Clone, Debug, Identifiable)]
-#[diesel(table_name = positions)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Position {
-    pub id: i32,
-    pub name: String,
-    pub department_id: Option<i32>,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-}
-
-#[derive(Insertable, Deserialize, poem_openapi::Object)]
-#[diesel(table_name = positions)]
-pub struct NewPosition {
-    pub name: String,
-    pub department_id: Option<i32>,
-}
-
-#[derive(AsChangeset, Deserialize, poem_openapi::Object)]
-#[diesel(table_name = positions)]
-pub struct UpdatePosition {
-    pub name: Option<String>,
-    pub department_id: Option<i32>,
-}
-
-#[derive(Serialize, poem_openapi::Object, Clone)]
-pub struct PositionResponse {
-    pub id: i32,
-    pub name: String,
-    pub department_id: Option<i32>,
-    pub department_name: Option<String>,
-    pub employee_count: i64,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(QueryableByName, Serialize, Clone, Debug)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct PositionWithDetails {
-    #[diesel(sql_type = Integer)]
-    pub id: i32,
-    #[diesel(sql_type = Text)]
-    pub name: String,
-    #[diesel(sql_type = Nullable<Integer>)]
-    pub department_id: Option<i32>,
-    #[diesel(sql_type = Nullable<Text>)]
-    pub department_name: Option<String>,
-    #[diesel(sql_type = Timestamp)]
-    pub created_at: chrono::NaiveDateTime,
-    #[diesel(sql_type = Timestamp)]
-    pub updated_at: chrono::NaiveDateTime,
-    #[diesel(sql_type = BigInt)]
-    pub employee_count: i64,
 }

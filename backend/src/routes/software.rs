@@ -4,12 +4,13 @@ use poem_openapi::{param::Path, param::Query, payload::Json, OpenApi};
 
 use crate::config::database::Pool;
 use crate::middleware;
-use crate::routes::employees::ErrorResponse;
 use crate::models::schema::software_catalog;
 use crate::models::software::{
     NewSoftware, Software, SoftwareListResponse, SoftwareResponse, UpdateSoftware,
 };
 use crate::services::activity_log_service::ActivityLogService;
+use crate::utils::db_helpers::get_connection;
+use crate::utils::error::{AppError, ErrorResponse};
 
 pub struct SoftwareApi {
     db_pool: Pool,
@@ -70,14 +71,9 @@ impl SoftwareApi {
         let per_page = per_page.unwrap_or(20).clamp(1, 100);
         let offset = (page - 1) * per_page;
 
-        let mut conn = match self.db_pool.get().await {
+        let mut conn = match get_connection(&self.db_pool).await {
             Ok(conn) => conn,
-            Err(e) => {
-                return SoftwareListApiResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
+            Err(e) => return SoftwareListApiResponse::InternalError(Json(e.to_error_response())),
         };
 
         // Build count query
@@ -97,17 +93,11 @@ impl SoftwareApi {
         }
 
         // Get total count
-        let total = match count_query
-            .count()
-            .get_result::<i64>(&mut conn)
-            .await
-        {
+        let total = match count_query.count().get_result::<i64>(&mut conn).await {
             Ok(count) => count,
             Err(e) => {
-                return SoftwareListApiResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to count software: {}", e),
-                }));
+                let err = AppError::from(e);
+                return SoftwareListApiResponse::InternalError(Json(err.to_error_response()));
             }
         };
 
@@ -137,10 +127,8 @@ impl SoftwareApi {
         {
             Ok(list) => list,
             Err(e) => {
-                return SoftwareListApiResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to fetch software: {}", e),
-                }));
+                let err = AppError::from(e);
+                return SoftwareListApiResponse::InternalError(Json(err.to_error_response()));
             }
         };
 
@@ -158,32 +146,20 @@ impl SoftwareApi {
     /// Get software by ID
     #[oai(path = "/:id", method = "get")]
     async fn get_software(&self, Path(id): Path<i32>) -> SoftwareDetailResponse {
-        let mut conn = match self.db_pool.get().await {
+        let mut conn = match get_connection(&self.db_pool).await {
             Ok(conn) => conn,
-            Err(e) => {
-                return SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
         };
 
-        match software_catalog::table
-            .find(id)
-            .first::<Software>(&mut conn)
-            .await
-        {
+        match software_catalog::table.find(id).first::<Software>(&mut conn).await {
             Ok(software) => SoftwareDetailResponse::Ok(Json(software.into())),
-            Err(diesel::result::Error::NotFound) => {
-                SoftwareDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Software with id {} not found", id),
-                }))
+            Err(e) => {
+                let err = AppError::from(e);
+                match err {
+                    AppError::NotFound(_) => SoftwareDetailResponse::NotFound(Json(err.to_error_response())),
+                    _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
+                }
             }
-            Err(e) => SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to fetch software: {}", e),
-            })),
         }
     }
 
@@ -194,14 +170,9 @@ impl SoftwareApi {
         auth: middleware::auth::AdminAuth,
         Json(new_software): Json<NewSoftware>,
     ) -> SoftwareDetailResponse {
-        let mut conn = match self.db_pool.get().await {
+        let mut conn = match get_connection(&self.db_pool).await {
             Ok(conn) => conn,
-            Err(e) => {
-                return SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
         };
 
         match diesel::insert_into(software_catalog::table)
@@ -210,12 +181,12 @@ impl SoftwareApi {
             .await
         {
             Ok(software) => {
-                // Log activity
                 let details = serde_json::json!({
                     "software_name": software.name,
                     "manufacturer": software.manufacturer,
                     "category": software.category,
                 });
+                
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
                     auth.0.user_id(),
@@ -227,10 +198,10 @@ impl SoftwareApi {
 
                 SoftwareDetailResponse::Created(Json(software.into()))
             }
-            Err(e) => SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to create software: {}", e),
-            })),
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDetailResponse::InternalError(Json(err.to_error_response()))
+            }
         }
     }
 
@@ -242,34 +213,20 @@ impl SoftwareApi {
         Path(id): Path<i32>,
         Json(update_data): Json<UpdateSoftware>,
     ) -> SoftwareDetailResponse {
-        let mut conn = match self.db_pool.get().await {
+        let mut conn = match get_connection(&self.db_pool).await {
             Ok(conn) => conn,
-            Err(e) => {
-                return SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
         };
 
         // Get old data for logging
-        let old_software = match software_catalog::table
-            .find(id)
-            .first::<Software>(&mut conn)
-            .await
-        {
+        let old_software = match software_catalog::table.find(id).first::<Software>(&mut conn).await {
             Ok(s) => s,
-            Err(diesel::result::Error::NotFound) => {
-                return SoftwareDetailResponse::NotFound(Json(ErrorResponse {
-                    error: "not_found".to_string(),
-                    message: format!("Software with id {} not found", id),
-                }));
-            }
             Err(e) => {
-                return SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to find software: {}", e),
-                }));
+                let err = AppError::from(e);
+                return match err {
+                    AppError::NotFound(_) => SoftwareDetailResponse::NotFound(Json(err.to_error_response())),
+                    _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
+                };
             }
         };
 
@@ -279,17 +236,13 @@ impl SoftwareApi {
             .await
         {
             Ok(software) => {
-                // Log changes
                 let mut changes = serde_json::Map::new();
                 
                 if let Some(ref new_name) = update_data.name {
                     if &old_software.name != new_name {
                         changes.insert(
                             "name".to_string(),
-                            serde_json::json!({
-                                "old": old_software.name,
-                                "new": new_name
-                            }),
+                            serde_json::json!({"old": old_software.name, "new": new_name}),
                         );
                     }
                 }
@@ -298,10 +251,7 @@ impl SoftwareApi {
                     if old_software.manufacturer.as_ref() != Some(new_manufacturer) {
                         changes.insert(
                             "manufacturer".to_string(),
-                            serde_json::json!({
-                                "old": old_software.manufacturer,
-                                "new": new_manufacturer
-                            }),
+                            serde_json::json!({"old": old_software.manufacturer, "new": new_manufacturer}),
                         );
                     }
                 }
@@ -310,20 +260,17 @@ impl SoftwareApi {
                     if old_software.category.as_ref() != Some(new_category) {
                         changes.insert(
                             "category".to_string(),
-                            serde_json::json!({
-                                "old": old_software.category,
-                                "new": new_category
-                            }),
+                            serde_json::json!({"old": old_software.category, "new": new_category}),
                         );
                     }
                 }
 
-                // Always log if there are any changes
                 if !changes.is_empty() {
                     let details = serde_json::json!({
                         "software_name": software.name,
                         "changes": changes,
                     });
+                    
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -336,10 +283,10 @@ impl SoftwareApi {
 
                 SoftwareDetailResponse::Ok(Json(software.into()))
             }
-            Err(e) => SoftwareDetailResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to update software: {}", e),
-            })),
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDetailResponse::InternalError(Json(err.to_error_response()))
+            }
         }
     }
 
@@ -350,17 +297,11 @@ impl SoftwareApi {
         auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> SoftwareDeleteResponse {
-        let mut conn = match self.db_pool.get().await {
+        let mut conn = match get_connection(&self.db_pool).await {
             Ok(conn) => conn,
-            Err(e) => {
-                return SoftwareDeleteResponse::InternalError(Json(ErrorResponse {
-                    error: "database_error".to_string(),
-                    message: format!("Failed to get database connection: {}", e),
-                }));
-            }
+            Err(e) => return SoftwareDeleteResponse::InternalError(Json(e.to_error_response())),
         };
 
-        // Get software name before deletion
         let software_name = software_catalog::table
             .find(id)
             .select(software_catalog::name)
@@ -368,19 +309,15 @@ impl SoftwareApi {
             .await
             .ok();
 
-        let result = diesel::delete(software_catalog::table.find(id))
-            .execute(&mut conn)
-            .await;
-
-        match result {
-            Ok(0) => SoftwareDeleteResponse::NotFound(Json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: format!("Software with id {} not found", id),
-            })),
+        match diesel::delete(software_catalog::table.find(id)).execute(&mut conn).await {
+            Ok(0) => {
+                let err = AppError::NotFound(format!("Software with id {} not found", id));
+                SoftwareDeleteResponse::NotFound(Json(err.to_error_response()))
+            }
             Ok(_) => {
-                // Log activity
                 if let Some(name) = software_name {
                     let details = serde_json::json!({ "software_name": name });
+                    
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -392,10 +329,10 @@ impl SoftwareApi {
                 }
                 SoftwareDeleteResponse::NoContent
             }
-            Err(e) => SoftwareDeleteResponse::InternalError(Json(ErrorResponse {
-                error: "database_error".to_string(),
-                message: format!("Failed to delete software: {}", e),
-            })),
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDeleteResponse::InternalError(Json(err.to_error_response()))
+            }
         }
     }
 }

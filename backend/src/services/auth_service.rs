@@ -1,25 +1,27 @@
 use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::{Duration, Utc};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::config::database::Pool;
 use crate::models::schema::users;
 use crate::models::user::{NewUser, User};
+use crate::utils::db_helpers::{get_connection, DbResult};
+use crate::utils::error::AppError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String, // user id
+    pub sub: String,
     pub email: String,
     pub role: String,
-    pub exp: i64, // expiration time
-    pub iat: i64, // issued at
+    pub exp: i64,
+    pub iat: i64,
 }
 
 pub struct AuthService {
@@ -37,32 +39,25 @@ impl AuthService {
         }
     }
 
-    /// Хеширование пароля с использованием Argon2
-    pub fn hash_password(&self, password: &str) -> Result<String, Box<dyn std::error::Error>> {
+    fn hash_password(&self, password: &str) -> DbResult<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        let password_hash = argon2
+        
+        argon2
             .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| format!("Password hashing failed: {}", e))?;
-        Ok(password_hash.to_string())
+            .map(|hash| hash.to_string())
+            .map_err(|e| AppError::InternalError(format!("Password hashing failed: {}", e)))
     }
 
-    /// Проверка пароля
-    pub fn verify_password(
-        &self,
-        password: &str,
-        hash: &str,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        let parsed_hash =
-            PasswordHash::new(hash).map_err(|e| format!("Invalid password hash: {}", e))?;
+    fn verify_password(&self, password: &str, hash: &str) -> DbResult<bool> {
+        let parsed_hash = PasswordHash::new(hash)
+            .map_err(|e| AppError::InternalError(format!("Invalid password hash: {}", e)))?;
+        
         let argon2 = Argon2::default();
-        Ok(argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok())
+        Ok(argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
     }
 
-    /// Генерация JWT токена
-    pub fn generate_token(&self, user: &User) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn generate_token(&self, user: &User) -> DbResult<String> {
         let now = Utc::now();
         let exp = (now + Duration::seconds(self.jwt_expiration)).timestamp();
 
@@ -79,42 +74,42 @@ impl AuthService {
             &claims,
             &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
         )
+        .map_err(|e| AppError::InternalError(format!("Token generation failed: {}", e)))
     }
 
-    /// Валидация JWT токена
-    pub fn verify_token(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    pub fn verify_token(&self, token: &str) -> DbResult<Claims> {
         let validation = Validation::default();
-        let token_data = decode::<Claims>(
+        
+        decode::<Claims>(
             token,
             &DecodingKey::from_secret(self.jwt_secret.as_bytes()),
             &validation,
-        )?;
-        Ok(token_data.claims)
+        )
+        .map(|data| data.claims)
+        .map_err(|e| AppError::Unauthorized(format!("Invalid token: {}", e)))
     }
 
-    /// Регистрация нового пользователя
     pub async fn register_user(
         &self,
         email: String,
         password: String,
         role: Option<String>,
-    ) -> Result<User, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get().await?;
+    ) -> DbResult<User> {
+        let mut conn = get_connection(&self.db_pool).await?;
 
-        // Проверка существования пользователя
         let existing_user = users::table
             .filter(users::email.eq(&email))
-            .first::<User>(&mut conn).await
-            .optional()?;
+            .first::<User>(&mut conn)
+            .await
+            .optional()
+            .map_err(AppError::from)?;
 
         if existing_user.is_some() {
-            return Err("User with this email already exists".into());
+            return Err(AppError::Conflict("User with this email already exists".to_string()));
         }
 
-        // Хеширование пароля
         let password_hash = self.hash_password(&password)?;
 
-        // Создание нового пользователя
         let new_user = NewUser {
             email,
             password_hash,
@@ -122,66 +117,61 @@ impl AuthService {
             role: role.unwrap_or_else(|| "user".to_string()),
         };
 
-        let user = diesel::insert_into(users::table)
+        diesel::insert_into(users::table)
             .values(&new_user)
-            .get_result::<User>(&mut conn).await?;
-
-        Ok(user)
+            .get_result::<User>(&mut conn)
+            .await
+            .map_err(AppError::from)
     }
 
-    /// Аутентификация пользователя
-    pub async fn authenticate(
-        &self,
-        email: String,
-        password: String,
-    ) -> Result<(User, String), Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get().await?;
+    pub async fn authenticate(&self, email: String, password: String) -> DbResult<(User, String)> {
+        let mut conn = get_connection(&self.db_pool).await?;
 
-        // Поиск пользователя
         let user = users::table
             .filter(users::email.eq(&email))
-            .first::<User>(&mut conn).await
-            .optional()?
-            .ok_or("Invalid email or password")?;
+            .first::<User>(&mut conn)
+            .await
+            .optional()
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
 
-        // Проверка активности
         if !user.is_active {
-            return Err("User account is disabled".into());
+            return Err(AppError::Unauthorized("User account is disabled".to_string()));
         }
 
-        // Проверка пароля
         if !self.verify_password(&password, &user.password_hash)? {
-            return Err("Invalid email or password".into());
+            return Err(AppError::Unauthorized("Invalid email or password".to_string()));
         }
 
-        // Обновление времени последнего входа
         diesel::update(users::table.find(user.id))
             .set(users::last_login_at.eq(Some(Utc::now().naive_utc())))
-            .execute(&mut conn).await?;
+            .execute(&mut conn)
+            .await
+            .map_err(AppError::from)?;
 
-        // Генерация токена
         let token = self.generate_token(&user)?;
 
         Ok((user, token))
     }
 
-    /// Получить пользователя по ID
-    pub async fn get_user_by_id(&self, user_id: Uuid) -> Result<User, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get().await?;
-        let user = users::table.find(user_id).first::<User>(&mut conn).await?;
-        Ok(user)
+    pub async fn get_user_by_id(&self, user_id: Uuid) -> DbResult<User> {
+        let mut conn = get_connection(&self.db_pool).await?;
+        
+        users::table
+            .find(user_id)
+            .first::<User>(&mut conn)
+            .await
+            .map_err(AppError::from)
     }
 
-    /// Получить пользователя по email
-    pub async fn get_user_by_email(
-        &self,
-        email: &str,
-    ) -> Result<Option<User>, Box<dyn std::error::Error>> {
-        let mut conn = self.db_pool.get().await?;
-        let user = users::table
+    pub async fn get_user_by_email(&self, email: &str) -> DbResult<Option<User>> {
+        let mut conn = get_connection(&self.db_pool).await?;
+        
+        users::table
             .filter(users::email.eq(email))
-            .first::<User>(&mut conn).await
-            .optional()?;
-        Ok(user)
+            .first::<User>(&mut conn)
+            .await
+            .optional()
+            .map_err(AppError::from)
     }
 }

@@ -2,6 +2,7 @@ mod config;
 mod integrations;
 mod middleware;
 mod models;
+mod repositories;
 mod routes;
 mod services;
 mod utils;
@@ -88,6 +89,8 @@ async fn main() -> Result<(), std::io::Error> {
             routes::api::Api::new(),
             routes::auth::AuthApi::new(auth_service.clone()),
             routes::employees::EmployeesApi::new(db_pool.clone()),
+            routes::departments::DepartmentsApi::new(db_pool.clone()),
+            routes::positions::PositionsApi::new(db_pool.clone()),
             routes::activity_log::ActivityLogApi::new(db_pool.clone()),
             routes::software::SoftwareApi::new(db_pool.clone(), activity_log.clone()),
         ),

@@ -5,10 +5,7 @@ use validator::Validate;
 use crate::models::user::UserResponse;
 use crate::routes::api::ApiTags;
 use crate::services::auth_service::AuthService;
-
-// ============================================================================
-// Request/Response DTOs
-// ============================================================================
+use crate::utils::error::{AppError, ErrorResponse};
 
 #[derive(Debug, Deserialize, Validate, Object)]
 pub struct RegisterRequest {
@@ -37,55 +34,38 @@ pub struct AuthResponse {
     pub user: UserResponse,
 }
 
-#[derive(Debug, Serialize, Object)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
-
-// ============================================================================
-// API Responses
-// ============================================================================
-
 #[derive(ApiResponse)]
 pub enum RegisterResponse {
-    /// User successfully registered
     #[oai(status = 201)]
     Created(Json<AuthResponse>),
-
-    /// Bad request (validation error)
     #[oai(status = 400)]
     BadRequest(Json<ErrorResponse>),
-
-    /// User already exists
     #[oai(status = 409)]
     Conflict(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
 }
 
 #[derive(ApiResponse)]
 pub enum LoginResponse {
-    /// Successfully authenticated
     #[oai(status = 200)]
     Ok(Json<AuthResponse>),
-
-    /// Invalid credentials
     #[oai(status = 401)]
     Unauthorized(Json<ErrorResponse>),
-
-    /// Bad request (validation error)
     #[oai(status = 400)]
     BadRequest(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
 }
 
 #[derive(ApiResponse)]
 pub enum MeResponse {
-    /// Current user info
     #[oai(status = 200)]
     Ok(Json<UserResponse>),
-
-    /// Unauthorized
     #[oai(status = 401)]
     Unauthorized(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
 }
 
 // ============================================================================
@@ -104,90 +84,57 @@ impl AuthApi {
 
 #[OpenApi(prefix_path = "/auth", tag = "ApiTags::Auth")]
 impl AuthApi {
-    /// Register a new user
-    ///
-    /// Creates a new user account with the provided credentials.
-    /// The password will be securely hashed using Argon2.
     #[oai(path = "/register", method = "post")]
     async fn register(&self, req: Json<RegisterRequest>) -> RegisterResponse {
-        // Валидация
         if let Err(e) = req.0.validate() {
-            return RegisterResponse::BadRequest(Json(ErrorResponse {
-                error: "validation_error".to_string(),
-                message: format!("Validation failed: {}", e),
-            }));
+            let validation_err = AppError::ValidationError(format!("Validation failed: {}", e));
+            return RegisterResponse::BadRequest(Json(validation_err.to_error_response()));
         }
 
-        // Регистрация пользователя
         match self
             .auth_service
             .register_user(req.0.email, req.0.password, Some("user".to_string()))
             .await
         {
-            Ok(user) => {
-                // Генерация токена
-                match self.auth_service.generate_token(&user) {
-                    Ok(token) => RegisterResponse::Created(Json(AuthResponse {
-                        token,
-                        user: user.into(),
-                    })),
-                    Err(e) => RegisterResponse::BadRequest(Json(ErrorResponse {
-                        error: "token_generation_failed".to_string(),
-                        message: format!("Failed to generate token: {}", e),
-                    })),
+            Ok(user) => match self.auth_service.generate_token(&user) {
+                Ok(token) => RegisterResponse::Created(Json(AuthResponse {
+                    token,
+                    user: user.into(),
+                })),
+                Err(e) => {
+                    RegisterResponse::InternalError(Json(e.to_error_response()))
                 }
-            }
-            Err(e) => {
-                let error_msg = e.to_string();
-                if error_msg.contains("already exists") {
-                    RegisterResponse::Conflict(Json(ErrorResponse {
-                        error: "user_exists".to_string(),
-                        message: "User with this email already exists".to_string(),
-                    }))
-                } else {
-                    RegisterResponse::BadRequest(Json(ErrorResponse {
-                        error: "registration_failed".to_string(),
-                        message: format!("Registration failed: {}", error_msg),
-                    }))
-                }
+            },
+            Err(e) => match e {
+                AppError::Conflict(_) => RegisterResponse::Conflict(Json(e.to_error_response())),
+                AppError::ValidationError(_) => RegisterResponse::BadRequest(Json(e.to_error_response())),
+                _ => RegisterResponse::InternalError(Json(e.to_error_response())),
             }
         }
     }
 
-    /// Login with email and password
-    ///
-    /// Authenticates a user and returns a JWT token.
-    /// The token should be included in subsequent requests as a Bearer token.
     #[oai(path = "/login", method = "post")]
     async fn login(&self, req: Json<LoginRequest>) -> LoginResponse {
-        // Валидация
         if let Err(e) = req.0.validate() {
-            return LoginResponse::BadRequest(Json(ErrorResponse {
-                error: "validation_error".to_string(),
-                message: format!("Validation failed: {}", e),
-            }));
+            let validation_err = AppError::ValidationError(format!("Validation failed: {}", e));
+            return LoginResponse::BadRequest(Json(validation_err.to_error_response()));
         }
 
-        // Аутентификация
         match self.auth_service.authenticate(req.0.email, req.0.password).await {
             Ok((user, token)) => LoginResponse::Ok(Json(AuthResponse {
                 token,
                 user: user.into(),
             })),
-            Err(e) => LoginResponse::Unauthorized(Json(ErrorResponse {
-                error: "authentication_failed".to_string(),
-                message: e.to_string(),
-            })),
+            Err(e) => match e {
+                AppError::Unauthorized(_) => LoginResponse::Unauthorized(Json(e.to_error_response())),
+                AppError::ValidationError(_) => LoginResponse::BadRequest(Json(e.to_error_response())),
+                _ => LoginResponse::InternalError(Json(e.to_error_response())),
+            }
         }
     }
 
-    /// Get current user information
-    ///
-    /// Returns information about the currently authenticated user.
-    /// Requires a valid JWT token in the Authorization header.
     #[oai(path = "/me", method = "get")]
     async fn me(&self, authorization: Header<Option<String>>) -> MeResponse {
-        // Проверить наличие токена
         let token = match authorization.0 {
             Some(ref auth_header) if auth_header.starts_with("Bearer ") => &auth_header[7..],
             _ => {
@@ -198,18 +145,13 @@ impl AuthApi {
             }
         };
 
-        // Валидировать токен
         let claims = match self.auth_service.verify_token(token) {
             Ok(claims) => claims,
-            Err(_) => {
-                return MeResponse::Unauthorized(Json(ErrorResponse {
-                    error: "unauthorized".to_string(),
-                    message: "Invalid or expired token".to_string(),
-                }));
+            Err(e) => {
+                return MeResponse::Unauthorized(Json(e.to_error_response()));
             }
         };
 
-        // Получить пользователя из БД
         let user_id = match uuid::Uuid::parse_str(&claims.sub) {
             Ok(id) => id,
             Err(_) => {
@@ -225,7 +167,7 @@ impl AuthApi {
             Err(_) => MeResponse::Unauthorized(Json(ErrorResponse {
                 error: "user_not_found".to_string(),
                 message: "User not found".to_string(),
-            })),
+            }))
         }
     }
 }

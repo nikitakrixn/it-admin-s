@@ -1,6 +1,8 @@
 pub mod activity_log;
 pub mod api;
 pub mod auth;
+pub mod departments;
 pub mod employees;
 pub mod health;
+pub mod positions;
 pub mod software;

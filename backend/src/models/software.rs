@@ -18,6 +18,10 @@ pub struct Software {
     pub requires_license: Option<bool>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub latest_version: Option<String>,
+    pub is_deprecated: Option<bool>,
+    pub security_risk_level: Option<String>,
+    pub vendor_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable, Deserialize, poem_openapi::Object)]
@@ -30,6 +34,10 @@ pub struct NewSoftware {
     pub website: Option<String>,
     pub is_system: Option<bool>,
     pub requires_license: Option<bool>,
+    pub latest_version: Option<String>,
+    pub is_deprecated: Option<bool>,
+    pub security_risk_level: Option<String>,
+    pub vendor_id: Option<i32>,
 }
 
 #[derive(Debug, AsChangeset, Deserialize, poem_openapi::Object)]
@@ -42,6 +50,10 @@ pub struct UpdateSoftware {
     pub website: Option<String>,
     pub is_system: Option<bool>,
     pub requires_license: Option<bool>,
+    pub latest_version: Option<String>,
+    pub is_deprecated: Option<bool>,
+    pub security_risk_level: Option<String>,
+    pub vendor_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, poem_openapi::Object)]
