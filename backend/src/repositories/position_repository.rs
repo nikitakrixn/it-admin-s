@@ -4,7 +4,7 @@ use diesel_async::RunQueryDsl;
 use crate::config::database::Pool;
 use crate::models::position::{NewPosition, Position, PositionWithDetails, UpdatePosition};
 use crate::models::schema::positions;
-use crate::utils::db_helpers::{get_connection, DbResult};
+use crate::utils::db_helpers::{DbResult, get_connection};
 
 pub struct PositionRepository {
     pool: Pool,
@@ -45,7 +45,11 @@ impl PositionRepository {
             .map_err(Into::into)
     }
 
-    pub async fn update_position(&self, id: i32, update_data: UpdatePosition) -> DbResult<Position> {
+    pub async fn update_position(
+        &self,
+        id: i32,
+        update_data: UpdatePosition,
+    ) -> DbResult<Position> {
         let mut conn = get_connection(&self.pool).await?;
 
         diesel::update(positions::table.find(id))

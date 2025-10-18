@@ -1,7 +1,7 @@
 use diesel::PgConnection;
-use diesel_async::pooled_connection::deadpool::Pool as AsyncPool;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::Pool as AsyncPool;
 
 // Синхронный пул для миграций
 pub type SyncPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<PgConnection>>;
@@ -14,13 +14,13 @@ use super::DatabaseConfig;
 /// Создает асинхронный пул соединений для основной работы приложения
 pub fn create_async_pool(config: &DatabaseConfig) -> Result<Pool, Box<dyn std::error::Error>> {
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(&config.url);
-    
+
     let pool = AsyncPool::builder(manager)
         .max_size(config.max_connections as usize)
         .build()?;
 
     tracing::info!("Async database connection pool created successfully");
-    
+
     Ok(pool)
 }
 

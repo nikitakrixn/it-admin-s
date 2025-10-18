@@ -101,15 +101,15 @@ impl AuthApi {
                     token,
                     user: user.into(),
                 })),
-                Err(e) => {
-                    RegisterResponse::InternalError(Json(e.to_error_response()))
-                }
+                Err(e) => RegisterResponse::InternalError(Json(e.to_error_response())),
             },
             Err(e) => match e {
                 AppError::Conflict(_) => RegisterResponse::Conflict(Json(e.to_error_response())),
-                AppError::ValidationError(_) => RegisterResponse::BadRequest(Json(e.to_error_response())),
+                AppError::ValidationError(_) => {
+                    RegisterResponse::BadRequest(Json(e.to_error_response()))
+                }
                 _ => RegisterResponse::InternalError(Json(e.to_error_response())),
-            }
+            },
         }
     }
 
@@ -120,16 +120,24 @@ impl AuthApi {
             return LoginResponse::BadRequest(Json(validation_err.to_error_response()));
         }
 
-        match self.auth_service.authenticate(req.0.email, req.0.password).await {
+        match self
+            .auth_service
+            .authenticate(req.0.email, req.0.password)
+            .await
+        {
             Ok((user, token)) => LoginResponse::Ok(Json(AuthResponse {
                 token,
                 user: user.into(),
             })),
             Err(e) => match e {
-                AppError::Unauthorized(_) => LoginResponse::Unauthorized(Json(e.to_error_response())),
-                AppError::ValidationError(_) => LoginResponse::BadRequest(Json(e.to_error_response())),
+                AppError::Unauthorized(_) => {
+                    LoginResponse::Unauthorized(Json(e.to_error_response()))
+                }
+                AppError::ValidationError(_) => {
+                    LoginResponse::BadRequest(Json(e.to_error_response()))
+                }
                 _ => LoginResponse::InternalError(Json(e.to_error_response())),
-            }
+            },
         }
     }
 
@@ -167,7 +175,7 @@ impl AuthApi {
             Err(_) => MeResponse::Unauthorized(Json(ErrorResponse {
                 error: "user_not_found".to_string(),
                 message: "User not found".to_string(),
-            }))
+            })),
         }
     }
 }

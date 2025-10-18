@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use poem_openapi::{param::Path, param::Query, payload::Json, OpenApi};
+use poem_openapi::{OpenApi, param::Path, param::Query, payload::Json};
 
 use crate::config::database::Pool;
 use crate::middleware;
@@ -56,7 +56,10 @@ enum SoftwareDeleteResponse {
     InternalError(Json<ErrorResponse>),
 }
 
-#[OpenApi(prefix_path = "/software", tag = "crate::routes::api::ApiTags::Software")]
+#[OpenApi(
+    prefix_path = "/software",
+    tag = "crate::routes::api::ApiTags::Software"
+)]
 impl SoftwareApi {
     /// Get list of software
     #[oai(path = "/", method = "get")]
@@ -78,7 +81,7 @@ impl SoftwareApi {
 
         // Build count query
         let mut count_query = software_catalog::table.into_boxed();
-        
+
         if let Some(ref cat) = category {
             count_query = count_query.filter(software_catalog::category.eq(cat));
         }
@@ -103,7 +106,7 @@ impl SoftwareApi {
 
         // Build data query
         let mut data_query = software_catalog::table.into_boxed();
-        
+
         if let Some(cat) = category {
             data_query = data_query.filter(software_catalog::category.eq(cat));
         }
@@ -132,8 +135,7 @@ impl SoftwareApi {
             }
         };
 
-        let software: Vec<SoftwareResponse> =
-            software_list.into_iter().map(|s| s.into()).collect();
+        let software: Vec<SoftwareResponse> = software_list.into_iter().map(|s| s.into()).collect();
 
         SoftwareListApiResponse::Ok(Json(SoftwareListResponse {
             software,
@@ -151,12 +153,18 @@ impl SoftwareApi {
             Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
         };
 
-        match software_catalog::table.find(id).first::<Software>(&mut conn).await {
+        match software_catalog::table
+            .find(id)
+            .first::<Software>(&mut conn)
+            .await
+        {
             Ok(software) => SoftwareDetailResponse::Ok(Json(software.into())),
             Err(e) => {
                 let err = AppError::from(e);
                 match err {
-                    AppError::NotFound(_) => SoftwareDetailResponse::NotFound(Json(err.to_error_response())),
+                    AppError::NotFound(_) => {
+                        SoftwareDetailResponse::NotFound(Json(err.to_error_response()))
+                    }
                     _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
                 }
             }
@@ -186,7 +194,7 @@ impl SoftwareApi {
                     "manufacturer": software.manufacturer,
                     "category": software.category,
                 });
-                
+
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
                     auth.0.user_id(),
@@ -219,12 +227,18 @@ impl SoftwareApi {
         };
 
         // Get old data for logging
-        let old_software = match software_catalog::table.find(id).first::<Software>(&mut conn).await {
+        let old_software = match software_catalog::table
+            .find(id)
+            .first::<Software>(&mut conn)
+            .await
+        {
             Ok(s) => s,
             Err(e) => {
                 let err = AppError::from(e);
                 return match err {
-                    AppError::NotFound(_) => SoftwareDetailResponse::NotFound(Json(err.to_error_response())),
+                    AppError::NotFound(_) => {
+                        SoftwareDetailResponse::NotFound(Json(err.to_error_response()))
+                    }
                     _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
                 };
             }
@@ -237,7 +251,7 @@ impl SoftwareApi {
         {
             Ok(software) => {
                 let mut changes = serde_json::Map::new();
-                
+
                 if let Some(ref new_name) = update_data.name {
                     if &old_software.name != new_name {
                         changes.insert(
@@ -246,7 +260,7 @@ impl SoftwareApi {
                         );
                     }
                 }
-                
+
                 if let Some(ref new_manufacturer) = update_data.manufacturer {
                     if old_software.manufacturer.as_ref() != Some(new_manufacturer) {
                         changes.insert(
@@ -255,7 +269,7 @@ impl SoftwareApi {
                         );
                     }
                 }
-                
+
                 if let Some(ref new_category) = update_data.category {
                     if old_software.category.as_ref() != Some(new_category) {
                         changes.insert(
@@ -270,7 +284,7 @@ impl SoftwareApi {
                         "software_name": software.name,
                         "changes": changes,
                     });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -309,7 +323,10 @@ impl SoftwareApi {
             .await
             .ok();
 
-        match diesel::delete(software_catalog::table.find(id)).execute(&mut conn).await {
+        match diesel::delete(software_catalog::table.find(id))
+            .execute(&mut conn)
+            .await
+        {
             Ok(0) => {
                 let err = AppError::NotFound(format!("Software with id {} not found", id));
                 SoftwareDeleteResponse::NotFound(Json(err.to_error_response()))
@@ -317,7 +334,7 @@ impl SoftwareApi {
             Ok(_) => {
                 if let Some(name) = software_name {
                     let details = serde_json::json!({ "software_name": name });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),

@@ -4,7 +4,7 @@ use diesel_async::RunQueryDsl;
 use crate::config::database::Pool;
 use crate::models::employee::{Employee, NewEmployee, UpdateEmployee};
 use crate::models::schema::{departments, employees, positions};
-use crate::utils::db_helpers::{get_connection, DbResult};
+use crate::utils::db_helpers::{DbResult, get_connection};
 
 pub struct EmployeeRepository {
     pool: Pool,
@@ -66,7 +66,10 @@ impl EmployeeRepository {
         Ok((results, total))
     }
 
-    pub async fn get_employee_by_id(&self, id: i32) -> DbResult<(Employee, Option<String>, Option<String>)> {
+    pub async fn get_employee_by_id(
+        &self,
+        id: i32,
+    ) -> DbResult<(Employee, Option<String>, Option<String>)> {
         let mut conn = get_connection(&self.pool).await?;
 
         employees::table
@@ -93,7 +96,11 @@ impl EmployeeRepository {
             .map_err(Into::into)
     }
 
-    pub async fn update_employee(&self, id: i32, update_data: UpdateEmployee) -> DbResult<Employee> {
+    pub async fn update_employee(
+        &self,
+        id: i32,
+        update_data: UpdateEmployee,
+    ) -> DbResult<Employee> {
         let mut conn = get_connection(&self.pool).await?;
 
         diesel::update(employees::table.find(id))
@@ -112,7 +119,21 @@ impl EmployeeRepository {
             .map_err(Into::into)
     }
 
-    pub async fn get_employee_info_for_log(&self, id: i32) -> DbResult<Option<(String, String, Option<String>, Option<String>, Option<String>, String, Option<String>, Option<String>)>> {
+    pub async fn get_employee_info_for_log(
+        &self,
+        id: i32,
+    ) -> DbResult<
+        Option<(
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            String,
+            Option<String>,
+            Option<String>,
+        )>,
+    > {
         let mut conn = get_connection(&self.pool).await?;
 
         employees::table
@@ -135,7 +156,11 @@ impl EmployeeRepository {
             .map_err(Into::into)
     }
 
-    pub async fn get_position_and_department_names(&self, position_id: Option<i32>, department_id: Option<i32>) -> DbResult<(Option<String>, Option<String>)> {
+    pub async fn get_position_and_department_names(
+        &self,
+        position_id: Option<i32>,
+        department_id: Option<i32>,
+    ) -> DbResult<(Option<String>, Option<String>)> {
         let mut conn = get_connection(&self.pool).await?;
 
         let pos = if let Some(pid) = position_id {
@@ -162,6 +187,4 @@ impl EmployeeRepository {
 
         Ok((pos, dept))
     }
-
-
 }

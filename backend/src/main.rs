@@ -26,8 +26,9 @@ async fn main() -> Result<(), std::io::Error> {
     // Initialize tracing with log level from config
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{},it_admin_backend=debug", config.app.log_level).into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("{},it_admin_backend=debug", config.app.log_level).into()
+            }),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -39,17 +40,21 @@ async fn main() -> Result<(), std::io::Error> {
     );
     tracing::info!("Environment: {}", config.app.env);
     tracing::info!("Log level: {}", config.app.log_level);
-    
+
     // Log optional integrations status
     if let Some(ad_config) = &config.ad {
         if ad_config.enabled {
             tracing::info!("Active Directory integration enabled: {}", ad_config.server);
         }
     }
-    
+
     if let Some(mikrotik_config) = &config.mikrotik {
         if mikrotik_config.enabled {
-            tracing::info!("MikroTik integration enabled: {}:{}", mikrotik_config.host, mikrotik_config.port);
+            tracing::info!(
+                "MikroTik integration enabled: {}:{}",
+                mikrotik_config.host,
+                mikrotik_config.port
+            );
         }
     }
 
@@ -61,7 +66,7 @@ async fn main() -> Result<(), std::io::Error> {
 
         let sync_pool = config::database::create_sync_pool(&config.database)
             .expect("Failed to create sync pool for migrations");
-        
+
         let mut conn = sync_pool
             .get()
             .expect("Failed to get DB connection for migrations");
@@ -80,7 +85,7 @@ async fn main() -> Result<(), std::io::Error> {
         config.jwt.secret.clone(),
         config.jwt.expiration,
     ));
-    
+
     let activity_log = services::activity_log_service::ActivityLogService::new(db_pool.clone());
 
     // Create API service with OpenAPI documentation
@@ -111,7 +116,7 @@ async fn main() -> Result<(), std::io::Error> {
         .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH"])
         .allow_credentials(true)
         .max_age(3600);
-    
+
     // Add allowed origins from config
     for origin in &config.cors.allowed_origins {
         cors = cors.allow_origin(origin.as_str());

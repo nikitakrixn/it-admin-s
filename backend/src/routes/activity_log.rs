@@ -125,7 +125,8 @@ impl ActivityLogApi {
             .order(activity_log::created_at.desc())
             .limit(per_page)
             .offset(offset)
-            .load::<ActivityLog>(&mut conn).await
+            .load::<ActivityLog>(&mut conn)
+            .await
         {
             Ok(logs) => logs,
             Err(e) => {
@@ -143,7 +144,8 @@ impl ActivityLogApi {
             users::table
                 .filter(users::id.eq_any(&user_ids))
                 .select((users::id, users::email))
-                .load::<(uuid::Uuid, String)>(&mut conn).await
+                .load::<(uuid::Uuid, String)>(&mut conn)
+                .await
                 .unwrap_or_default()
                 .into_iter()
                 .collect()

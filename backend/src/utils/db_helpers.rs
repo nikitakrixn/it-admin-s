@@ -1,7 +1,7 @@
 use crate::config::database::Pool;
 use crate::utils::error::AppError;
-use diesel_async::pooled_connection::deadpool::Object;
 use diesel_async::AsyncPgConnection;
+use diesel_async::pooled_connection::deadpool::Object;
 
 /// Get database connection from pool with error handling
 pub async fn get_connection(pool: &Pool) -> Result<Object<AsyncPgConnection>, AppError> {

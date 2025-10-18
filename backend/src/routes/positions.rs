@@ -80,7 +80,11 @@ impl PositionsApi {
         match self.repository.get_position_by_id(id).await {
             Ok(pos) => {
                 let dept_name = if let Some(dept_id) = pos.department_id {
-                    self.dept_repository.get_department_by_id(dept_id).await.ok().map(|d| d.name)
+                    self.dept_repository
+                        .get_department_by_id(dept_id)
+                        .await
+                        .ok()
+                        .map(|d| d.name)
                 } else {
                     None
                 };
@@ -97,7 +101,9 @@ impl PositionsApi {
                 PositionDetailResponse::Ok(Json(response))
             }
             Err(e) => match e {
-                AppError::NotFound(_) => PositionDetailResponse::NotFound(Json(e.to_error_response())),
+                AppError::NotFound(_) => {
+                    PositionDetailResponse::NotFound(Json(e.to_error_response()))
+                }
                 _ => PositionDetailResponse::InternalError(Json(e.to_error_response())),
             },
         }
@@ -113,7 +119,11 @@ impl PositionsApi {
         match self.repository.create_position(new_pos).await {
             Ok(pos) => {
                 let dept_name = if let Some(dept_id) = pos.department_id {
-                    self.dept_repository.get_department_by_id(dept_id).await.ok().map(|d| d.name)
+                    self.dept_repository
+                        .get_department_by_id(dept_id)
+                        .await
+                        .ok()
+                        .map(|d| d.name)
                 } else {
                     None
                 };
@@ -122,7 +132,7 @@ impl PositionsApi {
                     "position_name": pos.name,
                     "department_id": pos.department_id,
                 });
-                
+
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
                     auth.0.user_id(),
@@ -159,7 +169,9 @@ impl PositionsApi {
             Ok(pos) => pos,
             Err(e) => {
                 return match e {
-                    AppError::NotFound(_) => PositionDetailResponse::NotFound(Json(e.to_error_response())),
+                    AppError::NotFound(_) => {
+                        PositionDetailResponse::NotFound(Json(e.to_error_response()))
+                    }
                     _ => PositionDetailResponse::InternalError(Json(e.to_error_response())),
                 };
             }
@@ -169,14 +181,18 @@ impl PositionsApi {
             Ok(pos) => {
                 let mut tracker = ChangeTracker::new();
                 tracker.track_string("name", &old_pos.name, &pos.name);
-                tracker.track_option_i32("department_id", &old_pos.department_id, &pos.department_id);
+                tracker.track_option_i32(
+                    "department_id",
+                    &old_pos.department_id,
+                    &pos.department_id,
+                );
 
                 if tracker.has_changes() {
                     let details = serde_json::json!({
                         "position_name": pos.name,
                         "changes": tracker.into_json(),
                     });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -188,7 +204,11 @@ impl PositionsApi {
                 }
 
                 let dept_name = if let Some(dept_id) = pos.department_id {
-                    self.dept_repository.get_department_by_id(dept_id).await.ok().map(|d| d.name)
+                    self.dept_repository
+                        .get_department_by_id(dept_id)
+                        .await
+                        .ok()
+                        .map(|d| d.name)
                 } else {
                     None
                 };
@@ -215,7 +235,12 @@ impl PositionsApi {
         auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> PositionDetailResponse {
-        let pos_name = self.repository.get_position_by_id(id).await.ok().map(|p| p.name);
+        let pos_name = self
+            .repository
+            .get_position_by_id(id)
+            .await
+            .ok()
+            .map(|p| p.name);
 
         match self.repository.delete_position(id).await {
             Ok(0) => {
@@ -225,7 +250,7 @@ impl PositionsApi {
             Ok(_) => {
                 if let Some(name) = pos_name {
                     let details = serde_json::json!({ "position_name": name });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),

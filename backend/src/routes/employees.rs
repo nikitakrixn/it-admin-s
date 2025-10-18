@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::database::Pool;
 use crate::middleware;
-use crate::models::employee::{Employee, EmployeeResponse, NewEmployeeRequest, UpdateEmployeeRequest};
+use crate::models::employee::{
+    Employee, EmployeeResponse, NewEmployeeRequest, UpdateEmployeeRequest,
+};
 use crate::repositories::employee_repository::EmployeeRepository;
 use crate::routes::api::ApiTags;
 use crate::services::activity_log_service::ActivityLogService;
@@ -150,11 +152,17 @@ impl EmployeesApi {
         let page = page.unwrap_or(1).max(1);
         let per_page = per_page.unwrap_or(20).min(100);
 
-        match self.repository.list_employees(page, per_page, status, department_id).await {
+        match self
+            .repository
+            .list_employees(page, per_page, status, department_id)
+            .await
+        {
             Ok((results, total)) => {
                 let employees_list = results
                     .into_iter()
-                    .map(|(emp, pos_name, dept_name)| Self::employee_to_response(emp, pos_name, dept_name))
+                    .map(|(emp, pos_name, dept_name)| {
+                        Self::employee_to_response(emp, pos_name, dept_name)
+                    })
                     .collect();
 
                 EmployeesListResponse::Ok(Json(EmployeeListResponse {
@@ -172,11 +180,13 @@ impl EmployeesApi {
     #[oai(path = "/:id", method = "get")]
     async fn get_employee(&self, Path(id): Path<i32>) -> EmployeeDetailResponse {
         match self.repository.get_employee_by_id(id).await {
-            Ok((employee, pos_name, dept_name)) => {
-                EmployeeDetailResponse::Ok(Json(Self::employee_to_response(employee, pos_name, dept_name)))
-            }
+            Ok((employee, pos_name, dept_name)) => EmployeeDetailResponse::Ok(Json(
+                Self::employee_to_response(employee, pos_name, dept_name),
+            )),
             Err(e) => match e {
-                AppError::NotFound(_) => EmployeeDetailResponse::NotFound(Json(e.to_error_response())),
+                AppError::NotFound(_) => {
+                    EmployeeDetailResponse::NotFound(Json(e.to_error_response()))
+                }
                 _ => EmployeeDetailResponse::InternalError(Json(e.to_error_response())),
             },
         }
@@ -205,7 +215,7 @@ impl EmployeesApi {
                     "department_id": employee.department_id,
                     "position_id": employee.position_id,
                 });
-                
+
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
                     auth.0.user_id(),
@@ -215,7 +225,8 @@ impl EmployeesApi {
                     details,
                 );
 
-                let (pos_name, dept_name) = self.repository
+                let (pos_name, dept_name) = self
+                    .repository
                     .get_position_and_department_names(employee.position_id, employee.department_id)
                     .await
                     .unwrap_or((None, None));
@@ -240,7 +251,9 @@ impl EmployeesApi {
             Ok((emp, _, _)) => emp,
             Err(e) => {
                 return match e {
-                    AppError::NotFound(_) => EmployeeUpdateResponse::NotFound(Json(e.to_error_response())),
+                    AppError::NotFound(_) => {
+                        EmployeeUpdateResponse::NotFound(Json(e.to_error_response()))
+                    }
                     _ => EmployeeUpdateResponse::InternalError(Json(e.to_error_response())),
                 };
             }
@@ -259,19 +272,31 @@ impl EmployeesApi {
                 let mut tracker = ChangeTracker::new();
                 tracker.track_string("first_name", &old_employee.first_name, &employee.first_name);
                 tracker.track_string("last_name", &old_employee.last_name, &employee.last_name);
-                tracker.track_option_string("middle_name", &old_employee.middle_name, &employee.middle_name);
+                tracker.track_option_string(
+                    "middle_name",
+                    &old_employee.middle_name,
+                    &employee.middle_name,
+                );
                 tracker.track_option_string("email", &old_employee.email, &employee.email);
                 tracker.track_option_string("phone", &old_employee.phone, &employee.phone);
                 tracker.track_string("status", &old_employee.status, &employee.status);
-                tracker.track_option_i32("position_id", &old_employee.position_id, &employee.position_id);
-                tracker.track_option_i32("department_id", &old_employee.department_id, &employee.department_id);
+                tracker.track_option_i32(
+                    "position_id",
+                    &old_employee.position_id,
+                    &employee.position_id,
+                );
+                tracker.track_option_i32(
+                    "department_id",
+                    &old_employee.department_id,
+                    &employee.department_id,
+                );
 
                 if tracker.has_changes() {
                     let details = serde_json::json!({
                         "employee_name": employee.full_name(),
                         "changes": tracker.into_json(),
                     });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -282,7 +307,8 @@ impl EmployeesApi {
                     );
                 }
 
-                let (pos_name, dept_name) = self.repository
+                let (pos_name, dept_name) = self
+                    .repository
                     .get_position_and_department_names(employee.position_id, employee.department_id)
                     .await
                     .unwrap_or((None, None));
@@ -302,7 +328,12 @@ impl EmployeesApi {
         auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> EmployeeDeleteResponse {
-        let employee_info = self.repository.get_employee_info_for_log(id).await.ok().flatten();
+        let employee_info = self
+            .repository
+            .get_employee_info_for_log(id)
+            .await
+            .ok()
+            .flatten();
 
         match self.repository.delete_employee(id).await {
             Ok(0) => {
@@ -310,7 +341,17 @@ impl EmployeesApi {
                 EmployeeDeleteResponse::NotFound(Json(err.to_error_response()))
             }
             Ok(_) => {
-                if let Some((first_name, last_name, middle_name, email, phone, status, position, department)) = employee_info {
+                if let Some((
+                    first_name,
+                    last_name,
+                    middle_name,
+                    email,
+                    phone,
+                    status,
+                    position,
+                    department,
+                )) = employee_info
+                {
                     let full_name = if let Some(mn) = middle_name {
                         format!("{} {} {}", last_name, first_name, mn)
                     } else {
@@ -325,9 +366,15 @@ impl EmployeesApi {
                         "position": position,
                         "department": department,
                     });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
-                    self.activity_log.log_with_details_async(auth.0.user_id(), "deleted", "employee", id, details);
+                    self.activity_log.log_with_details_async(
+                        auth.0.user_id(),
+                        "deleted",
+                        "employee",
+                        id,
+                        details,
+                    );
                 }
                 EmployeeDeleteResponse::NoContent
             }
@@ -355,7 +402,8 @@ impl EmployeesApi {
                 Ok(count) if count > 0 => {
                     deleted_count += 1;
                     use crate::middleware::auth::ClaimsExt;
-                    self.activity_log.log_async(auth.0.user_id(), "deleted", "employee", id);
+                    self.activity_log
+                        .log_async(auth.0.user_id(), "deleted", "employee", id);
                 }
                 _ => failed_ids.push(id),
             }

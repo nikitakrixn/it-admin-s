@@ -88,7 +88,9 @@ impl DepartmentsApi {
                 DepartmentDetailResponse::Ok(Json(response))
             }
             Err(e) => match e {
-                AppError::NotFound(_) => DepartmentDetailResponse::NotFound(Json(e.to_error_response())),
+                AppError::NotFound(_) => {
+                    DepartmentDetailResponse::NotFound(Json(e.to_error_response()))
+                }
                 _ => DepartmentDetailResponse::InternalError(Json(e.to_error_response())),
             },
         }
@@ -107,7 +109,7 @@ impl DepartmentsApi {
                     "department_name": dept.name,
                     "description": dept.description,
                 });
-                
+
                 use crate::middleware::auth::ClaimsExt;
                 self.activity_log.log_with_details_async(
                     auth.0.user_id(),
@@ -144,7 +146,9 @@ impl DepartmentsApi {
             Ok(dept) => dept,
             Err(e) => {
                 return match e {
-                    AppError::NotFound(_) => DepartmentDetailResponse::NotFound(Json(e.to_error_response())),
+                    AppError::NotFound(_) => {
+                        DepartmentDetailResponse::NotFound(Json(e.to_error_response()))
+                    }
                     _ => DepartmentDetailResponse::InternalError(Json(e.to_error_response())),
                 };
             }
@@ -154,14 +158,18 @@ impl DepartmentsApi {
             Ok(dept) => {
                 let mut tracker = ChangeTracker::new();
                 tracker.track_string("name", &old_dept.name, &dept.name);
-                tracker.track_option_string("description", &old_dept.description, &dept.description);
+                tracker.track_option_string(
+                    "description",
+                    &old_dept.description,
+                    &dept.description,
+                );
 
                 if tracker.has_changes() {
                     let details = serde_json::json!({
                         "department_name": dept.name,
                         "changes": tracker.into_json(),
                     });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),
@@ -194,7 +202,12 @@ impl DepartmentsApi {
         auth: middleware::auth::AdminAuth,
         Path(id): Path<i32>,
     ) -> DepartmentDetailResponse {
-        let dept_name = self.repository.get_department_by_id(id).await.ok().map(|d| d.name);
+        let dept_name = self
+            .repository
+            .get_department_by_id(id)
+            .await
+            .ok()
+            .map(|d| d.name);
 
         match self.repository.delete_department(id).await {
             Ok(0) => {
@@ -204,7 +217,7 @@ impl DepartmentsApi {
             Ok(_) => {
                 if let Some(name) = dept_name {
                     let details = serde_json::json!({ "department_name": name });
-                    
+
                     use crate::middleware::auth::ClaimsExt;
                     self.activity_log.log_with_details_async(
                         auth.0.user_id(),

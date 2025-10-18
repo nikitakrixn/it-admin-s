@@ -32,7 +32,8 @@ impl ActivityLogService {
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn).await?;
+            .execute(&mut conn)
+            .await?;
 
         Ok(())
     }
@@ -56,7 +57,8 @@ impl ActivityLogService {
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn).await?;
+            .execute(&mut conn)
+            .await?;
 
         Ok(())
     }
@@ -93,7 +95,8 @@ impl ActivityLogService {
 
         diesel::insert_into(activity_log::table)
             .values(&new_log)
-            .execute(&mut conn).await?;
+            .execute(&mut conn)
+            .await?;
 
         Ok(())
     }
@@ -109,7 +112,7 @@ impl ActivityLogService {
         let pool = self.db_pool.clone();
         let action = action.into();
         let entity_type = entity_type.into();
-        
+
         tokio::spawn(async move {
             let service = ActivityLogService::new(pool);
             if let Err(e) = service.log(user_id, action, entity_type, entity_id).await {
@@ -130,10 +133,13 @@ impl ActivityLogService {
         let pool = self.db_pool.clone();
         let action = action.into();
         let entity_type = entity_type.into();
-        
+
         tokio::spawn(async move {
             let service = ActivityLogService::new(pool);
-            if let Err(e) = service.log_with_details(user_id, action, entity_type, entity_id, details).await {
+            if let Err(e) = service
+                .log_with_details(user_id, action, entity_type, entity_id, details)
+                .await
+            {
                 tracing::warn!("Failed to log activity with details: {}", e);
             }
         });

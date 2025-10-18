@@ -2,9 +2,11 @@ use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use crate::config::database::Pool;
-use crate::models::department::{Department, DepartmentWithCounts, NewDepartment, UpdateDepartment};
+use crate::models::department::{
+    Department, DepartmentWithCounts, NewDepartment, UpdateDepartment,
+};
 use crate::models::schema::departments;
-use crate::utils::db_helpers::{get_connection, DbResult};
+use crate::utils::db_helpers::{DbResult, get_connection};
 
 pub struct DepartmentRepository {
     pool: Pool,
@@ -45,7 +47,11 @@ impl DepartmentRepository {
             .map_err(Into::into)
     }
 
-    pub async fn update_department(&self, id: i32, update_data: UpdateDepartment) -> DbResult<Department> {
+    pub async fn update_department(
+        &self,
+        id: i32,
+        update_data: UpdateDepartment,
+    ) -> DbResult<Department> {
         let mut conn = get_connection(&self.pool).await?;
 
         diesel::update(departments::table.find(id))
