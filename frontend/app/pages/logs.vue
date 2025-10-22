@@ -439,6 +439,10 @@ const getActionIcon = (action: string) => {
         updated: "ri:edit-line",
         delete: "ri:delete-bin-line",
         deleted: "ri:delete-bin-line",
+        downloaded_config: "ri:download-line",
+        synced_all_stats: "ri:refresh-line",
+        synced_interfaces: "ri:router-line",
+        imported_peers: "ri:download-cloud-line",
     };
     return icons[action.toLowerCase()] || "ri:file-line";
 };
@@ -451,6 +455,10 @@ const getActionColor = (action: string) => {
         updated: "bg-blue-500",
         delete: "bg-red-500",
         deleted: "bg-red-500",
+        downloaded_config: "bg-purple-500",
+        synced_all_stats: "bg-indigo-500",
+        synced_interfaces: "bg-cyan-500",
+        imported_peers: "bg-teal-500",
     };
     return colors[action.toLowerCase()] || "bg-gray-500";
 };
@@ -460,6 +468,8 @@ const getEntityColor = (entity: string) => {
         employee: "bg-blue-100 text-blue-800",
         computer: "bg-purple-100 text-purple-800",
         equipment: "bg-amber-100 text-amber-800",
+        wireguard_peer: "bg-green-100 text-green-800",
+        wireguard_interface: "bg-cyan-100 text-cyan-800",
     };
     return colors[entity] || "bg-gray-100 text-gray-800";
 };
@@ -469,6 +479,8 @@ const getEntityLabel = (entity: string) => {
         employee: "Сотрудник",
         computer: "Компьютер",
         equipment: "Оборудование",
+        wireguard_peer: "WireGuard",
+        wireguard_interface: "WireGuard",
     };
     return labels[entity] || entity;
 };
@@ -491,6 +503,10 @@ const getActionDescription = (log: any) => {
         updated: "Изменен",
         delete: "Удален",
         deleted: "Удален",
+        downloaded_config: "Скачана конфигурация",
+        synced_all_stats: "Синхронизирована статистика",
+        synced_interfaces: "Синхронизированы интерфейсы",
+        imported_peers: "Импортированы пиры",
     };
 
     const entityLabels: Record<string, string> = {
@@ -503,13 +519,32 @@ const getActionDescription = (log: any) => {
         requests: "заявка",
         department: "отдел",
         departments: "отдел",
+        wireguard_peer: "WireGuard пир",
+        wireguard_interface: "WireGuard интерфейс",
     };
 
     const action = actionLabels[log.action.toLowerCase()] || log.action;
     const entity =
         entityLabels[log.entity_type.toLowerCase()] || log.entity_type;
+    
+    // Специальная обработка для WireGuard действий
+    if (log.action === "downloaded_config") {
+        return `Скачана конфигурация для пира #${log.entity_id}`;
+    }
+    if (log.action === "synced_all_stats") {
+        const count = log.details?.synced_count || 0;
+        return `Синхронизирована статистика (${count} пиров)`;
+    }
+    if (log.action === "synced_interfaces") {
+        const count = log.details?.synced_count || 0;
+        return `Синхронизированы интерфейсы (${count} шт.)`;
+    }
+    if (log.action === "imported_peers") {
+        const count = log.details?.imported_count || 0;
+        return `Импортированы пиры из MikroTik (${count} шт.)`;
+    }
+    
     const entityId = log.entity_id ? ` #${log.entity_id}` : "";
-
     return `${action} ${entity}${entityId}`;
 };
 </script>

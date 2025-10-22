@@ -88,6 +88,32 @@ async fn main() -> Result<(), std::io::Error> {
 
     let activity_log = services::activity_log_service::ActivityLogService::new(db_pool.clone());
 
+    // Initialize MikroTik client if enabled
+    let mikrotik_client = if let Some(ref mikrotik_config) = config.mikrotik {
+        if mikrotik_config.enabled {
+            match integrations::mikrotik::MikrotikClient::new(mikrotik_config) {
+                Ok(client) => {
+                    tracing::info!("MikroTik client initialized successfully");
+                    Some(std::sync::Arc::new(client))
+                }
+                Err(e) => {
+                    tracing::error!("Failed to initialize MikroTik client: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Create WireGuard service
+    let wireguard_service = std::sync::Arc::new(services::wireguard_service::WireguardService::new(
+        db_pool.clone(),
+        mikrotik_client.clone(),
+    ));
+
     // Create API service with OpenAPI documentation
     let api_service = OpenApiService::new(
         (
@@ -98,6 +124,7 @@ async fn main() -> Result<(), std::io::Error> {
             routes::positions::PositionsApi::new(db_pool.clone()),
             routes::activity_log::ActivityLogApi::new(db_pool.clone()),
             routes::software::SoftwareApi::new(db_pool.clone(), activity_log.clone()),
+            routes::wireguard::WireguardApi::new(db_pool.clone(), wireguard_service.clone(), mikrotik_client.clone()),
         ),
         &config.app.name,
         env!("CARGO_PKG_VERSION"),

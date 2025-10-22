@@ -6,3 +6,4 @@ pub mod employees;
 pub mod health;
 pub mod positions;
 pub mod software;
+pub mod wireguard;

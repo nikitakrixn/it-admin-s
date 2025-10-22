@@ -64,6 +64,7 @@ impl ActivityLogService {
     }
 
     /// Log an activity with full context (IP, user agent, details)
+    #[allow(dead_code)]
     pub async fn log_full(
         &self,
         user_id: Option<Uuid>,
@@ -102,6 +103,7 @@ impl ActivityLogService {
     }
 
     /// Log in background (fire and forget - doesn't return errors)
+    #[allow(dead_code)]
     pub fn log_async(
         &self,
         user_id: Option<Uuid>,

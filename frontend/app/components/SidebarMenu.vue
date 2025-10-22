@@ -42,6 +42,11 @@
             icon="ri:radar-line"
             label="Сканер сети"
         />
+        <SidebarMenuItem
+            to="/wireguard"
+            icon="ri:shield-user-line"
+            label="WireGuard VPN"
+        />
         <SidebarMenuItem to="/logs" icon="ri:history-line" label="Журнал" />
     </div>
 </template>

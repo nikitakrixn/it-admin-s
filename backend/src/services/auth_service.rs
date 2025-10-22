@@ -172,6 +172,7 @@ impl AuthService {
             .map_err(AppError::from)
     }
 
+    #[allow(dead_code)]
     pub async fn get_user_by_email(&self, email: &str) -> DbResult<Option<User>> {
         let mut conn = get_connection(&self.db_pool).await?;
 

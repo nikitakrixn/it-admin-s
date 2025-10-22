@@ -47,4 +47,6 @@ pub enum ApiTags {
     Software,
     /// Activity log and audit
     ActivityLog,
+    /// WireGuard VPN management
+    Wireguard,
 }

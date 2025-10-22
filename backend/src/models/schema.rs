@@ -2193,6 +2193,85 @@ diesel::table! {
 }
 
 diesel::table! {
+    wireguard_config_downloads (id) {
+        id -> Int4,
+        peer_id -> Int4,
+        downloaded_by -> Nullable<Uuid>,
+        downloaded_at -> Timestamp,
+        #[max_length = 45]
+        ip_address -> Nullable<Varchar>,
+        user_agent -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    wireguard_connection_history (id) {
+        id -> Int4,
+        peer_id -> Int4,
+        connected_at -> Timestamp,
+        disconnected_at -> Nullable<Timestamp>,
+        #[max_length = 45]
+        client_ip -> Nullable<Varchar>,
+        #[max_length = 45]
+        endpoint_ip -> Nullable<Varchar>,
+        rx_bytes -> Nullable<Int8>,
+        tx_bytes -> Nullable<Int8>,
+        duration_seconds -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
+    wireguard_interfaces (id) {
+        id -> Int4,
+        #[max_length = 100]
+        name -> Varchar,
+        listen_port -> Int4,
+        public_key -> Text,
+        private_key -> Nullable<Text>,
+        mtu -> Nullable<Int4>,
+        is_active -> Nullable<Bool>,
+        #[max_length = 100]
+        mikrotik_id -> Nullable<Varchar>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    wireguard_peers (id) {
+        id -> Int4,
+        interface_id -> Int4,
+        employee_id -> Nullable<Int4>,
+        #[max_length = 100]
+        name -> Varchar,
+        public_key -> Text,
+        private_key -> Nullable<Text>,
+        preshared_key -> Nullable<Text>,
+        allowed_ips -> Text,
+        #[max_length = 50]
+        client_address -> Varchar,
+        #[max_length = 255]
+        client_dns -> Nullable<Varchar>,
+        #[max_length = 255]
+        endpoint_address -> Nullable<Varchar>,
+        endpoint_port -> Nullable<Int4>,
+        persistent_keepalive -> Nullable<Int4>,
+        #[max_length = 100]
+        mikrotik_peer_id -> Nullable<Varchar>,
+        #[max_length = 20]
+        status -> Varchar,
+        last_handshake -> Nullable<Timestamp>,
+        rx_bytes -> Nullable<Int8>,
+        tx_bytes -> Nullable<Int8>,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        created_by -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
     work_time_tracking (id) {
         id -> Int4,
         request_id -> Nullable<Int4>,
@@ -2355,6 +2434,12 @@ diesel::joinable!(windows_features -> computers (computer_id));
 diesel::joinable!(windows_missing_updates -> computers (computer_id));
 diesel::joinable!(windows_services -> computers (computer_id));
 diesel::joinable!(windows_updates -> computers (computer_id));
+diesel::joinable!(wireguard_config_downloads -> users (downloaded_by));
+diesel::joinable!(wireguard_config_downloads -> wireguard_peers (peer_id));
+diesel::joinable!(wireguard_connection_history -> wireguard_peers (peer_id));
+diesel::joinable!(wireguard_peers -> employees (employee_id));
+diesel::joinable!(wireguard_peers -> users (created_by));
+diesel::joinable!(wireguard_peers -> wireguard_interfaces (interface_id));
 diesel::joinable!(work_time_tracking -> employees (employee_id));
 diesel::joinable!(work_time_tracking -> requests (request_id));
 diesel::joinable!(work_time_tracking -> users (approved_by));
@@ -2466,5 +2551,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     windows_missing_updates,
     windows_services,
     windows_updates,
+    wireguard_config_downloads,
+    wireguard_connection_history,
+    wireguard_interfaces,
+    wireguard_peers,
     work_time_tracking,
 );

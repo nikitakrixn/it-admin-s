@@ -43,6 +43,7 @@ impl ChangeTracker {
     }
 
     /// Добавить изменение опционального bool поля
+    #[allow(dead_code)]
     pub fn track_option_bool(&mut self, field: &str, old: &Option<bool>, new: &Option<bool>) {
         if old != new {
             self.changes.insert(

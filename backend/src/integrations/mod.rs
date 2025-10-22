@@ -1,1 +1,2 @@
-// External integrations (AD, MikroTik) will be implemented here
+// External integrations (AD, MikroTik)
+pub mod mikrotik;
