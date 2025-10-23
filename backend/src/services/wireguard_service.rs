@@ -63,12 +63,19 @@ impl WireguardService {
         let mikrotik_peer_id = if let Some(client) = &self.mikrotik_client {
             let mikrotik_request = CreateMikrotikPeerRequest {
                 interface: interface.name.clone(),
-                private_key: private_key.clone(), // Отправляем сгенерированный приватный ключ
+                public_key: public_key.clone(), // Публичный ключ пира
+                private_key: Some(private_key.clone()), // Приватный ключ для генерации конфига в MikroTik
                 preshared_key: None,
-                allowed_address: request.allowed_ips.clone().unwrap_or_else(|| "0.0.0.0/0,::/0".to_string()),
+                allowed_address: request.allowed_ips.clone().unwrap_or_else(|| "0.0.0.0/0,::/0".to_string()), // Allowed address для роутера
                 endpoint_address: request.endpoint_address.clone(),
                 endpoint_port: request.endpoint_port,
                 persistent_keepalive: request.persistent_keepalive.map(|k| format!("{}s", k)),
+                // Клиентские поля для генерации конфига в MikroTik
+                client_address: Some(request.client_address.clone()),
+                client_dns: request.client_dns.clone(),
+                client_endpoint: request.endpoint_address.clone(),
+                client_keepalive: request.persistent_keepalive.map(|k| format!("{}s", k)),
+                client_listen_port: request.endpoint_port,
                 comment: Some(request.name.clone()),
             };
 
@@ -116,11 +123,16 @@ impl WireguardService {
         peer_id: i32,
         update_data: UpdateWireguardPeer,
     ) -> Result<(), AppError> {
+        tracing::info!("Updating peer {}", peer_id);
+        tracing::debug!("Update data: {:?}", update_data);
+        
         // Получаем текущий пир
         let (peer, _, _, _) = self.repository.get_peer_by_id(peer_id).await?;
 
         // Обновляем в MikroTik если есть mikrotik_peer_id
         if let (Some(client), Some(mikrotik_id)) = (&self.mikrotik_client, &peer.mikrotik_peer_id) {
+            tracing::info!("Updating peer in MikroTik with ID: {}", mikrotik_id);
+            
             let mikrotik_update = UpdateMikrotikPeerRequest {
                 allowed_address: update_data.allowed_ips.clone(),
                 endpoint_address: update_data.endpoint_address.clone(),
@@ -130,11 +142,19 @@ impl WireguardService {
                 disabled: update_data.status.as_ref().map(|s| s == "disabled"),
             };
 
-            client.update_wireguard_peer(mikrotik_id, mikrotik_update).await?;
+            match client.update_wireguard_peer(mikrotik_id, mikrotik_update).await {
+                Ok(_) => tracing::info!("Successfully updated peer in MikroTik"),
+                Err(e) => {
+                    tracing::error!("Failed to update peer in MikroTik: {}", e);
+                    return Err(e);
+                }
+            }
         }
 
         // Обновляем в БД
+        tracing::info!("Updating peer in database");
         self.repository.update_peer(peer_id, update_data).await?;
+        tracing::info!("Successfully updated peer {}", peer_id);
         Ok(())
     }
 

@@ -583,11 +583,8 @@ impl WireguardApi {
     /// Sync all peers statistics from MikroTik
     #[oai(path = "/sync-all", method = "post")]
     async fn sync_all_peers(
-        &self,
-        auth: middleware::auth::AdminAuth,
+        &self
     ) -> WireguardPeersListResponse {
-        use crate::middleware::auth::ClaimsExt;
-
         // Get all peers from database
         match self.repository.list_peers(1, 1000, None, None, None).await {
             Ok((results, _)) => {

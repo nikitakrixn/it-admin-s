@@ -119,7 +119,7 @@ pub struct CreateWireguardPeerRequest {
     pub notes: Option<String>,
 }
 
-#[derive(AsChangeset, Deserialize, poem_openapi::Object)]
+#[derive(Debug, AsChangeset, Deserialize, poem_openapi::Object)]
 #[diesel(table_name = wireguard_peers)]
 pub struct UpdateWireguardPeer {
     pub employee_id: Option<i32>,
