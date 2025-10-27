@@ -396,7 +396,7 @@ const openCreateModal = () => {
     name: '',
     client_address: config.public.wgDefaultClientAddress || '',
     client_dns: config.public.wgDefaultClientDns || '',
-    endpoint_address: '',
+    endpoint_address: config.public.wgDefaultEndpointIp,
     endpoint_port: null,
     allowed_ips: config.public.wgDefaultAllowedIps || '0.0.0.0/0,::/0',
     persistent_keepalive: Number(config.public.wgDefaultPersistentKeepalive) || 25,
