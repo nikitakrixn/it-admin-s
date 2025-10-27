@@ -36,7 +36,7 @@ export const useAuth = () => {
   const token = useCookie("auth_token", {
     maxAge: 60 * 60 * 24, // 24 hours
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: config.public.appEnv === "production",
   });
   const user = useState<User | null>("user", () => null);
 

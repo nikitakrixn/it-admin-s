@@ -43,13 +43,14 @@ export default defineNuxtConfig({
 
     // Public keys (exposed to client)
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || "http://localhost:8000/api",
-      appName: process.env.NUXT_PUBLIC_APP_NAME,
-      wgDefaultClientAddress: process.env.NUXT_PUBLIC_WG_DEFAULT_CLIENT_ADDRESS,
-      wgDefaultClientDns: process.env.NUXT_PUBLIC_WG_DEFAULT_CLIENT_DNS,
-      wgDefaultAllowedIps: process.env.NUXT_PUBLIC_WG_DEFAULT_ALLOWED_IPS,
-      wgDefaultPersistentKeepalive: process.env.NUXT_PUBLIC_WG_DEFAULT_PERSISTENT_KEEPALIVE,
-      wgDefaultEndpointIp: process.env.NUXT_PUBLIC_WG_DEFAULT_ENDPOINT_IP,
+      apiBase: "http://localhost:8000/api",
+      appName: "IT-Admin",
+      appEnv: "development",
+      wgDefaultClientAddress: "",
+      wgDefaultClientDns: "",
+      wgDefaultAllowedIps: "",
+      wgDefaultPersistentKeepalive: "",
+      wgDefaultEndpointIp: "",
     },
   },
 
