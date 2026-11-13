@@ -1,0 +1,11 @@
+# Зависимости и артефакты сборки
+node_modules
+.nuxt
+.output
+dist
+package-lock.json
+
+# Стандартные артефакты
+*.min.js
+*.min.css
+coverage

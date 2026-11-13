@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Установка Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Кэш cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Проверка форматирования (rustfmt)
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (предупреждения — ошибки)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Тесты
+        run: cargo test --all-features
+
+  frontend:
+    name: Frontend (Nuxt)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Получение исходников
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Проверка форматирования (Prettier)
+        run: npm run format:check
+
+      - name: Проверка типов (vue-tsc)
+        run: npm run typecheck
+
+      - name: Сборка
+        run: npm run build

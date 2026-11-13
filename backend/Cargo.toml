@@ -1,0 +1,65 @@
+[package]
+name = "it-admin-backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Web Framework
+poem = { version = "3.1.12", features = ["websocket", "multipart", "compression"] }
+poem-openapi = { version = "5.1.16", features = ["swagger-ui", "rapidoc", "redoc"] }
+tokio = { version = "1.54.1", features = ["full"] }
+
+# Database
+diesel = { version = "2.3.14", features = ["postgres", "r2d2", "chrono", "uuid", "serde_json", "numeric"] }
+diesel-async = { version = "0.9.2", features = ["postgres", "deadpool"] }
+diesel_migrations = "2.3.2"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication & Security
+jsonwebtoken = { version = "11.1.0", features = ["rust_crypto"] }
+argon2 = "0.6.0"
+uuid = { version = "1.29.1", features = ["v4", "serde"] }
+
+# Date & Time
+chrono = { version = "0.4.45", features = ["serde"] }
+
+# Environment
+dotenvy = "0.15.7"
+
+# Logging & Tracing
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+
+# Error Handling
+anyhow = "1.0.104"
+thiserror = "2.0.21"
+
+# LDAP Integration (Active Directory)
+ldap3 = { version = "0.12.1", features = ["tls"] }
+
+# Async utilities
+futures = "0.3.34"
+async-trait = "0.1.91"
+
+# Validation
+validator = { version = "0.21.0", features = ["derive"] }
+
+# WireGuard key generation
+base64 = "0.23.1"
+x25519-dalek = { version = "3.0.0", features = ["static_secrets", "getrandom"] }
+
+# Numeric (decimal) fields for monitoring metrics and monitor sizes
+bigdecimal = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4.6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
