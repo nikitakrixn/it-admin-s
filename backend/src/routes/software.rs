@@ -1,0 +1,501 @@
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use poem_openapi::{OpenApi, param::Path, param::Query, payload::Json};
+
+use crate::config::database::Pool;
+use crate::middleware;
+use crate::models::schema::{computer_software, computers, employees, software_catalog};
+use crate::models::software::{
+    NewSoftware, Software, SoftwareInstallationListResponse, SoftwareInstallationResponse,
+    SoftwareListResponse, SoftwareResponse, UpdateSoftware,
+};
+use crate::services::activity_log_service::ActivityLogService;
+use crate::utils::db_helpers::get_connection;
+use crate::utils::error::{AppError, ErrorResponse};
+
+pub struct SoftwareApi {
+    db_pool: Pool,
+    activity_log: ActivityLogService,
+}
+
+impl SoftwareApi {
+    pub fn new(db_pool: Pool, activity_log: ActivityLogService) -> Self {
+        Self {
+            db_pool,
+            activity_log,
+        }
+    }
+}
+
+#[derive(poem_openapi::ApiResponse)]
+enum SoftwareListApiResponse {
+    #[oai(status = 200)]
+    Ok(Json<SoftwareListResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
+}
+
+#[derive(poem_openapi::ApiResponse)]
+enum SoftwareDetailResponse {
+    #[oai(status = 200)]
+    Ok(Json<SoftwareResponse>),
+    #[oai(status = 201)]
+    Created(Json<SoftwareResponse>),
+    #[oai(status = 404)]
+    NotFound(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
+}
+
+#[derive(poem_openapi::ApiResponse)]
+enum SoftwareDeleteResponse {
+    #[oai(status = 204)]
+    NoContent,
+    #[oai(status = 404)]
+    NotFound(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(poem_openapi::ApiResponse)]
+enum SoftwareInstallationsResponse {
+    #[oai(status = 200)]
+    Ok(Json<SoftwareInstallationListResponse>),
+    #[oai(status = 404)]
+    NotFound(Json<ErrorResponse>),
+    #[oai(status = 500)]
+    InternalError(Json<ErrorResponse>),
+}
+
+#[OpenApi(
+    prefix_path = "/software",
+    tag = "crate::routes::api::ApiTags::Software"
+)]
+impl SoftwareApi {
+    /// Get list of software
+    #[oai(path = "/", method = "get")]
+    async fn list_software(
+        &self,
+        Query(page): Query<Option<i64>>,
+        Query(per_page): Query<Option<i64>>,
+        Query(category): Query<Option<String>>,
+        Query(search): Query<Option<String>>,
+    ) -> SoftwareListApiResponse {
+        let page = page.unwrap_or(1).max(1);
+        let per_page = per_page.unwrap_or(20).clamp(1, 100);
+        let offset = (page - 1) * per_page;
+
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => return SoftwareListApiResponse::InternalError(Json(e.to_error_response())),
+        };
+
+        // Build count query
+        let mut count_query = software_catalog::table.into_boxed();
+
+        if let Some(ref cat) = category {
+            count_query = count_query.filter(software_catalog::category.eq(cat));
+        }
+
+        if let Some(ref search_term) = search {
+            let pattern = format!("%{}%", search_term);
+            count_query = count_query.filter(
+                software_catalog::name
+                    .ilike(pattern.clone())
+                    .or(software_catalog::manufacturer.ilike(pattern)),
+            );
+        }
+
+        // Get total count
+        let total = match count_query.count().get_result::<i64>(&mut conn).await {
+            Ok(count) => count,
+            Err(e) => {
+                let err = AppError::from(e);
+                return SoftwareListApiResponse::InternalError(Json(err.to_error_response()));
+            }
+        };
+
+        // Build data query
+        let mut data_query = software_catalog::table.into_boxed();
+
+        if let Some(cat) = category {
+            data_query = data_query.filter(software_catalog::category.eq(cat));
+        }
+
+        if let Some(search_term) = search {
+            let pattern = format!("%{}%", search_term);
+            data_query = data_query.filter(
+                software_catalog::name
+                    .ilike(pattern.clone())
+                    .or(software_catalog::manufacturer.ilike(pattern)),
+            );
+        }
+
+        // Get paginated results
+        let software_list = match data_query
+            .order(software_catalog::name.asc())
+            .limit(per_page)
+            .offset(offset)
+            .load::<Software>(&mut conn)
+            .await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                let err = AppError::from(e);
+                return SoftwareListApiResponse::InternalError(Json(err.to_error_response()));
+            }
+        };
+
+        let software: Vec<SoftwareResponse> = software_list.into_iter().map(|s| s.into()).collect();
+
+        SoftwareListApiResponse::Ok(Json(SoftwareListResponse {
+            software,
+            total,
+            page,
+            per_page,
+        }))
+    }
+
+    /// Get software by ID
+    #[oai(path = "/:id", method = "get")]
+    async fn get_software(&self, Path(id): Path<i32>) -> SoftwareDetailResponse {
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
+        };
+
+        match software_catalog::table
+            .find(id)
+            .first::<Software>(&mut conn)
+            .await
+        {
+            Ok(software) => SoftwareDetailResponse::Ok(Json(software.into())),
+            Err(e) => {
+                let err = AppError::from(e);
+                match err {
+                    AppError::NotFound(_) => {
+                        SoftwareDetailResponse::NotFound(Json(err.to_error_response()))
+                    }
+                    _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
+                }
+            }
+        }
+    }
+
+    /// Create new software
+    #[oai(path = "/", method = "post")]
+    async fn create_software(
+        &self,
+        auth: middleware::auth::AdminAuth,
+        Json(new_software): Json<NewSoftware>,
+    ) -> SoftwareDetailResponse {
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
+        };
+
+        match diesel::insert_into(software_catalog::table)
+            .values(&new_software)
+            .get_result::<Software>(&mut conn)
+            .await
+        {
+            Ok(software) => {
+                let details = serde_json::json!({
+                    "software_name": software.name,
+                    "manufacturer": software.manufacturer,
+                    "category": software.category,
+                });
+
+                use crate::middleware::auth::ClaimsExt;
+                self.activity_log.log_with_details_async(
+                    auth.0.user_id(),
+                    "created",
+                    "software",
+                    software.id,
+                    details,
+                );
+
+                SoftwareDetailResponse::Created(Json(software.into()))
+            }
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDetailResponse::InternalError(Json(err.to_error_response()))
+            }
+        }
+    }
+
+    /// Update software
+    #[oai(path = "/:id", method = "put")]
+    async fn update_software(
+        &self,
+        auth: middleware::auth::AdminAuth,
+        Path(id): Path<i32>,
+        Json(update_data): Json<UpdateSoftware>,
+    ) -> SoftwareDetailResponse {
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => return SoftwareDetailResponse::InternalError(Json(e.to_error_response())),
+        };
+
+        // Get old data for logging
+        let old_software = match software_catalog::table
+            .find(id)
+            .first::<Software>(&mut conn)
+            .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                let err = AppError::from(e);
+                return match err {
+                    AppError::NotFound(_) => {
+                        SoftwareDetailResponse::NotFound(Json(err.to_error_response()))
+                    }
+                    _ => SoftwareDetailResponse::InternalError(Json(err.to_error_response())),
+                };
+            }
+        };
+
+        match diesel::update(software_catalog::table.find(id))
+            .set(&update_data)
+            .get_result::<Software>(&mut conn)
+            .await
+        {
+            Ok(software) => {
+                let mut changes = serde_json::Map::new();
+
+                if let Some(ref new_name) = update_data.name
+                    && &old_software.name != new_name
+                {
+                    changes.insert(
+                        "name".to_string(),
+                        serde_json::json!({"old": old_software.name, "new": new_name}),
+                    );
+                }
+
+                if let Some(ref new_manufacturer) = update_data.manufacturer
+                    && old_software.manufacturer.as_ref() != Some(new_manufacturer)
+                {
+                    changes.insert(
+                            "manufacturer".to_string(),
+                            serde_json::json!({"old": old_software.manufacturer, "new": new_manufacturer}),
+                        );
+                }
+
+                if let Some(ref new_category) = update_data.category
+                    && old_software.category.as_ref() != Some(new_category)
+                {
+                    changes.insert(
+                        "category".to_string(),
+                        serde_json::json!({"old": old_software.category, "new": new_category}),
+                    );
+                }
+
+                if !changes.is_empty() {
+                    let details = serde_json::json!({
+                        "software_name": software.name,
+                        "changes": changes,
+                    });
+
+                    use crate::middleware::auth::ClaimsExt;
+                    self.activity_log.log_with_details_async(
+                        auth.0.user_id(),
+                        "updated",
+                        "software",
+                        software.id,
+                        details,
+                    );
+                }
+
+                SoftwareDetailResponse::Ok(Json(software.into()))
+            }
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDetailResponse::InternalError(Json(err.to_error_response()))
+            }
+        }
+    }
+
+    /// Get computers where the software is installed
+    #[oai(path = "/:id/installations", method = "get")]
+    async fn list_software_installations(
+        &self,
+        Path(id): Path<i32>,
+    ) -> SoftwareInstallationsResponse {
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => {
+                return SoftwareInstallationsResponse::InternalError(Json(e.to_error_response()));
+            }
+        };
+
+        match software_catalog::table
+            .find(id)
+            .first::<Software>(&mut conn)
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                let err = AppError::from(e);
+                return match err {
+                    AppError::NotFound(_) => {
+                        SoftwareInstallationsResponse::NotFound(Json(err.to_error_response()))
+                    }
+                    _ => {
+                        SoftwareInstallationsResponse::InternalError(Json(err.to_error_response()))
+                    }
+                };
+            }
+        }
+
+        let rows = computer_software::table
+            .inner_join(computers::table)
+            .left_join(employees::table.on(computers::employee_id.eq(employees::id.nullable())))
+            .filter(computer_software::software_catalog_id.eq(id))
+            .select((
+                computer_software::id,
+                computers::id,
+                computers::hostname,
+                computers::inventory_number,
+                computers::employee_id,
+                employees::first_name.nullable(),
+                employees::last_name.nullable(),
+                employees::middle_name.nullable(),
+                computer_software::version,
+                computer_software::license_type,
+                computer_software::license_end_date,
+                computer_software::installation_date,
+                computer_software::status,
+            ))
+            .order((computers::hostname.asc(), computer_software::id.asc()))
+            .load::<(
+                i32,
+                i32,
+                Option<String>,
+                Option<String>,
+                Option<i32>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<chrono::NaiveDate>,
+                Option<chrono::NaiveDate>,
+                Option<String>,
+            )>(&mut conn)
+            .await;
+
+        let rows = match rows {
+            Ok(rows) => rows,
+            Err(e) => {
+                let err = AppError::from(e);
+                return SoftwareInstallationsResponse::InternalError(Json(err.to_error_response()));
+            }
+        };
+
+        let installations: Vec<SoftwareInstallationResponse> = rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    computer_id,
+                    hostname,
+                    inventory_number,
+                    employee_id,
+                    first_name,
+                    last_name,
+                    middle_name,
+                    version,
+                    license_type,
+                    license_end_date,
+                    installation_date,
+                    status,
+                )| {
+                    let computer_name = hostname
+                        .clone()
+                        .or_else(|| inventory_number.clone())
+                        .unwrap_or_else(|| format!("Компьютер #{computer_id}"));
+
+                    let employee_name = match (last_name, first_name) {
+                        (Some(last), Some(first)) => Some(match middle_name {
+                            Some(middle) => format!("{last} {first} {middle}"),
+                            None => format!("{last} {first}"),
+                        }),
+                        _ => None,
+                    };
+
+                    SoftwareInstallationResponse {
+                        id,
+                        computer_id,
+                        computer_name,
+                        inventory_number,
+                        employee_id,
+                        employee_name,
+                        version,
+                        license_type,
+                        license_end_date: license_end_date.map(|date| date.to_string()),
+                        installation_date: installation_date.map(|date| date.to_string()),
+                        status,
+                    }
+                },
+            )
+            .collect();
+
+        let total = installations.len() as i64;
+
+        SoftwareInstallationsResponse::Ok(Json(SoftwareInstallationListResponse {
+            software_id: id,
+            installations,
+            total,
+        }))
+    }
+
+    /// Delete software
+    #[oai(path = "/:id", method = "delete")]
+    async fn delete_software(
+        &self,
+        auth: middleware::auth::AdminAuth,
+        Path(id): Path<i32>,
+    ) -> SoftwareDeleteResponse {
+        let mut conn = match get_connection(&self.db_pool).await {
+            Ok(conn) => conn,
+            Err(e) => return SoftwareDeleteResponse::InternalError(Json(e.to_error_response())),
+        };
+
+        let software_name = software_catalog::table
+            .find(id)
+            .select(software_catalog::name)
+            .first::<String>(&mut conn)
+            .await
+            .ok();
+
+        match diesel::delete(software_catalog::table.find(id))
+            .execute(&mut conn)
+            .await
+        {
+            Ok(0) => {
+                let err = AppError::NotFound(format!("Software with id {} not found", id));
+                SoftwareDeleteResponse::NotFound(Json(err.to_error_response()))
+            }
+            Ok(_) => {
+                if let Some(name) = software_name {
+                    let details = serde_json::json!({ "software_name": name });
+
+                    use crate::middleware::auth::ClaimsExt;
+                    self.activity_log.log_with_details_async(
+                        auth.0.user_id(),
+                        "deleted",
+                        "software",
+                        id,
+                        details,
+                    );
+                }
+                SoftwareDeleteResponse::NoContent
+            }
+            Err(e) => {
+                let err = AppError::from(e);
+                SoftwareDeleteResponse::InternalError(Json(err.to_error_response()))
+            }
+        }
+    }
+}

@@ -1,0 +1,14 @@
+pub mod ad_repository;
+pub mod analytics_repository;
+pub mod computer_component_repository;
+pub mod computer_repository;
+pub mod consumable_repository;
+pub mod department_repository;
+pub mod employee_repository;
+pub mod equipment_repository;
+pub mod license_pool_repository;
+pub mod monitoring_repository;
+pub mod network_repository;
+pub mod position_repository;
+pub mod request_repository;
+pub mod wireguard_repository;
