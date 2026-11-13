@@ -1,0 +1,147 @@
+import type { FetchError } from 'ofetch'
+
+export interface User {
+  id: string
+  email: string
+  employee_id: number | null
+  role: string
+  is_active: boolean
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: User
+}
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+export interface RegisterCredentials {
+  email: string
+  password: string
+  name: string
+}
+
+export interface ErrorResponse {
+  error: string
+  message: string
+}
+
+export const useAuth = () => {
+  const config = useRuntimeConfig()
+  const apiBase = useApiBase()
+  const token = useCookie('auth_token', {
+    maxAge: 60 * 60 * 24, // 24 hours
+    sameSite: 'lax',
+    secure: config.public.appEnv === 'production',
+  })
+  const user = useState<User | null>('user', () => null)
+
+  const login = async (credentials: LoginCredentials) => {
+    try {
+      const { data, error } = await useFetch<AuthResponse, FetchError<ErrorResponse>>(
+        `${apiBase}/auth/login`,
+        {
+          method: 'POST',
+          body: credentials,
+        },
+      )
+
+      if (error.value) {
+        throw new Error(error.value.data?.message || 'Login failed')
+      }
+
+      if (data.value) {
+        token.value = data.value.token
+        user.value = data.value.user
+        return data.value
+      }
+    } catch (err) {
+      throw new Error(getErrorMessage(err, 'Login failed'), { cause: err })
+    }
+  }
+
+  const register = async (credentials: RegisterCredentials) => {
+    try {
+      const { data, error } = await useFetch<AuthResponse, FetchError<ErrorResponse>>(
+        `${apiBase}/auth/register`,
+        {
+          method: 'POST',
+          body: credentials,
+        },
+      )
+
+      if (error.value) {
+        throw new Error(error.value.data?.message || 'Registration failed')
+      }
+
+      if (data.value) {
+        token.value = data.value.token
+        user.value = data.value.user
+        return data.value
+      }
+    } catch (err) {
+      throw new Error(getErrorMessage(err, 'Registration failed'), {
+        cause: err,
+      })
+    }
+  }
+
+  const fetchUser = async () => {
+    if (!token.value) {
+      user.value = null
+      return null
+    }
+
+    try {
+      const { data, error } = await useFetch<User, FetchError<ErrorResponse>>(
+        `${apiBase}/auth/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${token.value}`,
+          },
+        },
+      )
+
+      if (error.value) {
+        token.value = null
+        user.value = null
+        return null
+      }
+
+      if (data.value) {
+        user.value = data.value
+        return data.value
+      }
+    } catch {
+      // Сетевая ошибка или истёкший токен — сбрасываем сессию
+      token.value = null
+      user.value = null
+      return null
+    }
+  }
+
+  const logout = () => {
+    token.value = null
+    user.value = null
+    navigateTo('/login')
+  }
+
+  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const isAdmin = computed(() => user.value?.role === 'admin')
+
+  return {
+    user: readonly(user),
+    token: readonly(token),
+    isAuthenticated,
+    isAdmin,
+    login,
+    register,
+    fetchUser,
+    logout,
+  }
+}
