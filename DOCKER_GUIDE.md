@@ -2,78 +2,139 @@
 
 ## Требования
 
-- Docker Desktop или Docker Engine с Compose v2
-- свободные порты `3000`, `8000`, `5432`, `6379`
+- Docker Engine с Compose v2
+- домен, A-запись которого указывает на сервер
+- открытые порты `80` и `443` (Caddy выпускает TLS-сертификат Let's Encrypt)
 
-## Подготовка
+PostgreSQL, API и Nuxt наружу не публикуются: снаружи доступен только Caddy,
+который проксирует запросы на Nuxt-сервер. Браузер общается с API через
+встроенный BFF, а JWT хранится в httpOnly-cookie.
 
-Скопируйте примеры окружения:
+## Production
 
-```powershell
-Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env
-```
+1. Скопируйте пример окружения и заполните его:
 
-В `backend/.env` при необходимости измените `JWT_SECRET` и параметры
-подключения к Active Directory и MikroTik. Для Docker-сети `DATABASE_URL`
-переопределяется в `docker-compose.yml` и указывает на сервис `postgres`.
+   ```bash
+   cp .env.example .env
+   ```
 
-## Production-режим
+   Обязательно замените:
 
-```powershell
+   - `DOMAIN` и `ACME_EMAIL` — домен и почта для Let's Encrypt;
+   - `APP_ORIGIN` — тот же адрес с `https://`;
+   - `POSTGRES_PASSWORD` и `DATABASE_URL` — пароль должен совпадать в обоих
+     местах, а в URL допускаются только буквы, цифры, `-` и `_`;
+   - `JWT_SECRET` — не короче 32 символов (`openssl rand -base64 48`);
+   - `BOOTSTRAP_ADMIN_EMAIL` и `BOOTSTRAP_ADMIN_PASSWORD` — первый
+     администратор, пароль не короче 12 символов с буквой и цифрой.
+
+2. Запустите сервисы:
+
+   ```bash
+   docker compose up --build -d
+   docker compose logs -f
+   ```
+
+3. Откройте `https://<DOMAIN>` и войдите под учётной записью из
+   `BOOTSTRAP_ADMIN_*`. Смените пароль в разделе «Пароль» в левом нижнем углу.
+
+Начальный администратор создаётся только при пустой таблице `users`. Если
+пользователи уже есть, переменные `BOOTSTRAP_ADMIN_*` игнорируются. В
+production без них и с пустой базой приложение не запустится — это защита от
+случайного развёртывания без администратора.
+
+Дальнейшие пользователи создаются в разделе «Пользователи» (доступен только
+администраторам).
+
+### Обновление
+
+```bash
+git pull
 docker compose up --build -d
-docker compose logs -f
+docker image prune -f
 ```
 
-Остановка:
+Миграции применяются автоматически при старте бэкенда.
 
-```powershell
-docker compose down
-```
+### Остановка
 
-Остановка с удалением данных PostgreSQL и Redis:
-
-```powershell
-docker compose down -v
+```bash
+docker compose down          # остановить, данные сохранить
+docker compose down -v       # остановить и удалить тома (база, сертификаты)
 ```
 
 ## Режим разработки
 
-```powershell
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```bash
+docker compose -f docker-compose.dev.yml up
 ```
 
-В этом режиме исходники монтируются в контейнеры, бэкенд работает через
-`cargo watch`, а Nuxt — в dev-режиме с hot reload.
+Исходники монтируются в контейнеры, бэкенд работает через `cargo watch`, Nuxt —
+в dev-режиме с hot reload. Доступны:
+
+- приложение — <http://localhost:3000>
+- API — <http://localhost:8000/api>
+- Swagger UI — <http://localhost:8000/docs>
+
+Демо-администратор в dev-режиме: `admin@example.com` / `AdminPassword123!`.
 
 ## Демо-данные
 
-```powershell
-docker compose cp backend/seeds postgres:/tmp/seeds
-docker compose exec postgres sh -c 'for f in /tmp/seeds/*.sql; do psql -U admin -d itadmin -v ON_ERROR_STOP=1 -f "$f" || exit 1; done'
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backend/seeds/01_employees.sql
 ```
 
-Скрипты идемпотентные, их можно запускать повторно.
+Файлы в `backend/seeds/` идемпотентные, их можно применять повторно и в любом
+порядке. Набор данных описан в [`backend/seeds/README.md`](backend/seeds/README.md).
 
-## Адреса API
+## Резервное копирование
 
-В браузере фронтенд обращается к `http://localhost:8000/api`. Внутри
-Docker-сети SSR использует `http://backend:8000/api`. Эти адреса разделены
-переменными `NUXT_PUBLIC_API_BASE` и `NUXT_API_BASE_SERVER`, поэтому менять
-код при развёртывании не нужно.
+Скрипты рассчитаны на Linux-сервер с bash.
+
+```bash
+./scripts/backup.sh                       # архив в ./backups
+./scripts/restore.sh backups/it-admin-20260101-030000.sql.gz
+```
+
+`backup.sh` делает `pg_dump`, сжимает результат, проверяет, что архив не пустой,
+и удаляет копии старше 14 дней. Каталог и срок хранения меняются переменными
+`BACKUP_DIR` и `RETENTION_DAYS`.
+
+Пример ежедневного запуска в 3:00 через cron:
+
+```cron
+0 3 * * * cd /opt/it-admin && BACKUP_DIR=/var/backups/it-admin ./scripts/backup.sh >> /var/log/it-admin-backup.log 2>&1
+```
+
+Копии нужно хранить вне сервера: отправляйте каталог `backups/` в объектное
+хранилище или на отдельный диск. Восстановление перезаписывает текущую базу,
+поэтому перед запуском скрипт спрашивает подтверждение.
 
 ## Полезные команды
 
-```powershell
+```bash
 # статус контейнеров
 docker compose ps
 
-# логи только бэкенда
+# логи
 docker compose logs -f backend
+docker compose logs -f caddy
 
 # подключиться к PostgreSQL
-docker compose exec postgres psql -U admin -d itadmin
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
 # пересобрать один сервис
 docker compose up --build -d backend
 ```
+
+## Если что-то не запускается
+
+- **`JWT_SECRET должен содержать минимум 32 символа`** — значение в `.env`
+  слишком короткое или осталось из примера.
+- **`В базе нет пользователей. Задайте BOOTSTRAP_ADMIN_EMAIL...`** — на пустой
+  базе не заданы данные первого администратора.
+- **Caddy не выпускает сертификат** — проверьте, что A-запись домена указывает
+  на сервер, порты 80/443 открыты, а `DOMAIN` в `.env` совпадает с адресом, по
+  которому открывается панель.
+- **Не удаётся войти после смены домена** — cookie привязана к домену; очистите
+  cookie для старого адреса.

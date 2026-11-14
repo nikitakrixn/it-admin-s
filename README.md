@@ -27,15 +27,16 @@ JWT-авторизация, демонстрационные данные, unit-
 - **Active Directory** — группы, учётные записи, членство и привязка к
   сотрудникам.
 - **Мониторинг** — последние метрики компьютеров и история замеров.
+- **Пользователи** — роли, блокировка учётных записей и смена пароля.
 
 ## Стек
 
 | Слой           | Технологии                                               |
 | -------------- | -------------------------------------------------------- |
 | Бэкенд         | Rust 2024, poem + poem-openapi, Diesel Async, PostgreSQL |
-| Авторизация    | JWT, Argon2                                              |
+| Авторизация    | JWT, Argon2, httpOnly-cookie на стороне Nuxt             |
 | Фронтенд       | Nuxt 4, Vue 3, TypeScript, Tailwind CSS, Nuxt Icon       |
-| Инфраструктура | Docker Compose, GitHub Actions                           |
+| Инфраструктура | Docker Compose, Caddy с TLS, GitHub Actions              |
 | Качество       | rustfmt, Clippy, ESLint, Prettier, vue-tsc               |
 
 ## Структура
@@ -49,41 +50,26 @@ backend/
     repositories/    доступ к PostgreSQL
     routes/          REST-эндпоинты
     services/        бизнес-логика и интеграции
-    middleware/      JWT-авторизация
+    middleware/      авторизация и rate limit
     utils/           ошибки, пароли, трекер изменений
 frontend/
   app/
     pages/           страницы приложения
     components/      переиспользуемые компоненты
     composables/     клиенты API и состояние
+    middleware/      защита маршрутов
     plugins/         настройка $fetch
+  server/            BFF: вход, выход, прокси API
+scripts/             резервное копирование и восстановление
+Caddyfile            TLS и reverse proxy
 ```
 
-## Быстрый старт в Docker
+## Быстрый старт
 
-```powershell
-Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env
-docker compose up --build
-```
+Production-развёртывание с TLS описано в [`DOCKER_GUIDE.md`](DOCKER_GUIDE.md):
+нужен домен, `.env` с секретами и `docker compose up --build -d`.
 
-После запуска:
-
-- приложение — <http://localhost:3000>
-- API — <http://localhost:8000/api>
-- Swagger UI — <http://localhost:8000/docs>
-
-Миграции применяются автоматически при старте бэкенда. Для загрузки демо-данных
-в контейнерную базу:
-
-```powershell
-docker compose cp backend/seeds postgres:/tmp/seeds
-docker compose exec postgres sh -c 'for f in /tmp/seeds/*.sql; do psql -U admin -d itadmin -v ON_ERROR_STOP=1 -f "$f" || exit 1; done'
-```
-
-## Локальный запуск
-
-Нужны Rust (stable), Node.js 24+ и PostgreSQL 16+.
+Для локальной разработки нужны Rust (stable), Node.js 24+ и PostgreSQL 16+.
 
 ### 1. База данных
 
@@ -104,6 +90,8 @@ cargo run
 ```
 
 Сервер слушает `http://localhost:8000`, миграции применяются при старте.
+При первом запуске на пустой базе создаётся администратор из
+`BOOTSTRAP_ADMIN_EMAIL` и `BOOTSTRAP_ADMIN_PASSWORD`.
 
 ### 3. Фронтенд
 
@@ -118,6 +106,10 @@ npm run dev
 `cargo-watch`) и Nuxt. Если бэкенд уже запущен отдельно, используйте
 `npm run frontend`.
 
+Приложение — <http://localhost:3000>. Браузер не обращается к API напрямую:
+Nuxt-сервер проксирует запросы через `/api/backend` и подставляет токен из
+httpOnly-cookie.
+
 ### 4. Демо-данные
 
 ```powershell
@@ -129,27 +121,28 @@ Get-ChildItem backend\seeds\*.sql | Sort-Object Name | ForEach-Object {
 ```
 
 Подробнее о наборе данных — в [`backend/seeds/README.md`](backend/seeds/README.md).
+Демо-администратор: `qa-monitor@example.com` / `TestPass123!`. Эти данные
+предназначены только для локальной разработки.
 
-## Учётная запись
+## Пользователи и безопасность
 
-Публичной регистрации администратора нет: новый пользователь создаётся через
-`POST /api/auth/register` с ролью `user`. Чтобы выдать права администратора:
-
-```powershell
-$body = @{ email='admin@example.com'; password='TestPass123!'; name='Администратор' } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri 'http://localhost:8000/api/auth/register' `
-  -ContentType 'application/json' -Body $body
-
-$env:PGPASSWORD='12345678'
-& 'C:\Program Files\PostgreSQL\17\bin\psql.exe' -h localhost -p 5433 -U postgres -d it-admin-s `
-  -c "UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';"
-```
-
-После этого можно войти в интерфейс и пользоваться разделами администрирования.
+- Публичной регистрации нет. Новых пользователей создаёт администратор в
+  разделе «Пользователи»; роль назначается там же.
+- Вход блокируется на 15 минут после 5 неудачных попыток. Дополнительно
+  действует ограничение 20 попыток за 5 минут с одного IP.
+- Пароль при создании и смене — не короче 12 символов, обязательно буква и
+  цифра. Хеширование — Argon2id.
+- JWT не попадает в JavaScript: Nuxt-сервер хранит его в httpOnly-cookie
+  (`SameSite=Lax`, `Secure` в production) и проверяет заголовок `Origin` у
+  изменяющих запросов.
+- Все эндпоинты API требуют токен, кроме `/api/auth/login`, `/health` и
+  документации (последняя выключена в production).
+- В production наружу опубликован только Caddy с TLS; PostgreSQL, API и
+  Nuxt-сервер доступны лишь внутри Docker-сети.
 
 ## API
 
-- Swagger UI: `http://localhost:8000/docs`
+- Swagger UI: `http://localhost:8000/docs` (только при `DOCS_ENABLED=true`)
 - OpenAPI-спецификация: `http://localhost:8000/api-spec`
 - Проверка здоровья: `http://localhost:8000/health`
 
@@ -157,6 +150,9 @@ $env:PGPASSWORD='12345678'
 `/api/equipment`, `/api/consumables`, `/api/requests`, `/api/software`,
 `/api/licenses`, `/api/network`, `/api/ad`, `/api/monitoring`,
 `/api/dashboard`, `/api/activity-log`.
+
+Запросы к API выполняются с заголовком `Authorization: Bearer <JWT>`. Токен
+выдаёт `POST /api/auth/login`.
 
 ## Проверки
 
@@ -184,23 +180,28 @@ CI-workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) запуск�
 
 ## Переменные окружения
 
-Бэкенд (`backend/.env`):
+Production-конфигурация лежит в `.env` в корне проекта — полный список с
+комментариями в [`.env.example`](.env.example).
 
-| Переменная                     | Назначение                      |
-| ------------------------------ | ------------------------------- |
-| `DATABASE_URL`                 | строка подключения к PostgreSQL |
-| `APP_HOST`, `APP_PORT`         | адрес и порт API                |
-| `JWT_SECRET`, `JWT_EXPIRATION` | подпись и срок жизни токена     |
-| `CORS_ALLOWED_ORIGINS`         | разрешённые источники           |
-| `AD_*`                         | подключение к Active Directory  |
-| `MIKROTIK_*`                   | интеграция с MikroTik           |
-| `REDIS_URL`                    | кэш и сессии                    |
+Бэкенд (`backend/.env` при локальном запуске):
+
+| Переменная                     | Назначение                                         |
+| ------------------------------ | -------------------------------------------------- |
+| `DATABASE_URL`                 | строка подключения к PostgreSQL                    |
+| `APP_HOST`, `APP_PORT`         | адрес и порт API                                   |
+| `JWT_SECRET`, `JWT_EXPIRATION` | подпись и срок жизни токена (секрет ≥ 32 символов) |
+| `CORS_ALLOWED_ORIGINS`         | разрешённые источники                              |
+| `BOOTSTRAP_ADMIN_EMAIL`        | email первого администратора                       |
+| `BOOTSTRAP_ADMIN_PASSWORD`     | пароль первого администратора                      |
+| `DOCS_ENABLED`                 | Swagger UI (по умолчанию выключен в production)    |
+| `AD_*`                         | подключение к Active Directory                     |
+| `MIKROTIK_*`                   | интеграция с MikroTik                              |
 
 Фронтенд (`frontend/.env`):
 
 | Переменная             | Назначение                           |
 | ---------------------- | ------------------------------------ |
-| `NUXT_PUBLIC_API_BASE` | адрес API для браузера               |
-| `NUXT_API_BASE_SERVER` | адрес API для SSR и Docker-сети      |
+| `NUXT_API_BASE_SERVER` | адрес API для Nuxt-сервера           |
 | `NUXT_PUBLIC_APP_NAME` | название приложения                  |
+| `NUXT_PUBLIC_APP_ENV`  | `development` или `production`       |
 | `NUXT_PUBLIC_WG_*`     | параметры по умолчанию для WireGuard |

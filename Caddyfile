@@ -1,0 +1,22 @@
+# Reverse proxy с автоматическим TLS от Let's Encrypt.
+# Домен и email задаются переменными DOMAIN и ACME_EMAIL в .env.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# Наружу опубликован только Nuxt-сервер: он проксирует API через BFF
+	# и хранит JWT в httpOnly-cookie. Бэкенд и база доступны только внутри сети.
+	reverse_proxy frontend:3000
+}

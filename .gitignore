@@ -21,6 +21,9 @@ logs/
 # Docker
 docker-compose.override.yml
 
+# Резервные копии базы
+backups/
+
 # Temporary files
 *.tmp
 *.temp
