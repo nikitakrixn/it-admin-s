@@ -44,13 +44,12 @@ export default defineNuxtConfig({
 
   // Runtime config
   runtimeConfig: {
-    // Private keys (only available server-side)
-    apiSecret: '',
+    // Приватные ключи доступны только серверу. Браузер обращается к API
+    // через BFF (/api/backend), поэтому адрес бэкенда не публикуется.
     apiBaseServer: 'http://localhost:8000/api',
 
     // Public keys (exposed to client)
     public: {
-      apiBase: 'http://localhost:8000/api',
       appName: 'IT-Admin',
       appEnv: 'development',
       wgDefaultClientAddress: '',

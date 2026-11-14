@@ -17,5 +17,14 @@
     <SidebarMenuItem to="/ad" icon="ri:account-circle-line" label="Active Directory" />
     <SidebarMenuItem to="/wireguard" icon="ri:shield-user-line" label="WireGuard VPN" />
     <SidebarMenuItem to="/logs" icon="ri:history-line" label="Журнал" />
+
+    <template v-if="isAdmin">
+      <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase text-gray-400">Администрирование</p>
+      <SidebarMenuItem to="/admin/users" icon="ri:user-settings-line" label="Пользователи" />
+    </template>
   </div>
 </template>
+
+<script setup lang="ts">
+const { isAdmin } = useAuth()
+</script>

@@ -9,12 +9,20 @@
       <p class="text-sm font-medium text-gray-900 truncate">
         {{ user?.email || 'Пользователь' }}
       </p>
-      <button
-        class="text-xs text-gray-500 hover:text-primary-600 transition-colors"
-        @click="handleLogout"
-      >
-        Выйти
-      </button>
+      <div class="flex items-center gap-3">
+        <NuxtLink
+          to="/settings/password"
+          class="text-xs text-gray-500 hover:text-primary-600 transition-colors"
+        >
+          Пароль
+        </NuxtLink>
+        <button
+          class="text-xs text-gray-500 hover:text-primary-600 transition-colors"
+          @click="handleLogout"
+        >
+          Выйти
+        </button>
+      </div>
     </div>
   </div>
 </template>

@@ -55,15 +55,6 @@
               <Icon v-else name="ri:login-box-line" class="mr-2" />
               {{ loading ? 'Вход...' : 'Войти' }}
             </button>
-
-            <div class="text-center">
-              <NuxtLink
-                to="/register"
-                class="text-sm text-primary-600 hover:text-primary-700 font-medium"
-              >
-                Нет аккаунта? Зарегистрироваться
-              </NuxtLink>
-            </div>
           </form>
         </div>
       </div>
