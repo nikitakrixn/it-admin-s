@@ -13,6 +13,8 @@ use poem::{
     middleware::{Cors, Tracing},
 };
 use poem_openapi::OpenApiService;
+use std::sync::Arc;
+use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -22,6 +24,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     // Load configuration
     let config = config::Config::from_env().expect("Failed to load configuration");
+    config.validate().expect("Invalid configuration");
 
     // Initialize tracing with log level from config
     tracing_subscriber::registry()
@@ -87,6 +90,39 @@ async fn main() -> Result<(), std::io::Error> {
     ));
 
     let activity_log = services::activity_log_service::ActivityLogService::new(db_pool.clone());
+
+    // На чистой базе создаём первого администратора из переменных окружения.
+    // Пароль проверяется по общей политике, поэтому должен быть не короче 12 символов.
+    let users_count = auth_service
+        .count_users()
+        .await
+        .expect("Failed to count users");
+
+    if users_count == 0 {
+        match &config.bootstrap_admin {
+            Some(admin) => {
+                auth_service
+                    .register_user(
+                        admin.email.clone(),
+                        admin.password.clone(),
+                        Some("admin".to_string()),
+                    )
+                    .await
+                    .expect("Failed to create bootstrap administrator");
+                tracing::info!("Создан начальный администратор: {}", admin.email);
+            }
+            None if config.app.env == "production" => {
+                panic!(
+                    "В базе нет пользователей. Задайте BOOTSTRAP_ADMIN_EMAIL и BOOTSTRAP_ADMIN_PASSWORD для создания администратора"
+                );
+            }
+            None => {
+                tracing::warn!(
+                    "В базе нет пользователей. Задайте BOOTSTRAP_ADMIN_EMAIL и BOOTSTRAP_ADMIN_PASSWORD, чтобы создать администратора"
+                );
+            }
+        }
+    }
 
     // Initialize MikroTik client if enabled
     let mikrotik_client = if let Some(ref mikrotik_config) = config.mikrotik {
@@ -162,13 +198,24 @@ async fn main() -> Result<(), std::io::Error> {
         cors = cors.allow_origin(origin.as_str());
     }
 
-    // Build application routes
-    let app = Route::new()
+    // Build application routes. Документация отключается в production через DOCS_ENABLED.
+    let mut app = Route::new()
         .nest("/api", api_service)
-        .nest("/docs", ui)
-        .nest("/api-spec", spec)
-        .at("/health", poem::endpoint::make_sync(|_| "OK"))
-        .data(auth_service) // Р”РѕР±Р°РІР»СЏРµРј AuthService РІ app data РґР»СЏ jwt_checker
+        .at("/health", poem::endpoint::make_sync(|_| "OK"));
+
+    if config.docs_enabled {
+        app = app.nest("/docs", ui).nest("/api-spec", spec);
+    }
+
+    // Ограничиваем частоту попыток входа: 20 запросов за 5 минут с одного адреса.
+    let login_limiter = Arc::new(utils::rate_limit::FixedWindowLimiter::new(
+        20,
+        Duration::from_secs(300),
+    ));
+
+    let app = app
+        .with(middleware::auth::RequireAuth::new(login_limiter))
+        .data(auth_service) // AuthService доступен middleware и jwt_checker
         .with(cors)
         .with(Tracing);
 

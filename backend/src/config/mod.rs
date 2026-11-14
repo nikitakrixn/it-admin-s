@@ -9,8 +9,16 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
     pub cors: CorsConfig,
+    pub bootstrap_admin: Option<BootstrapAdmin>,
+    pub docs_enabled: bool,
     pub ad: Option<AdConfig>,
     pub mikrotik: Option<MikrotikConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BootstrapAdmin {
+    pub email: String,
+    pub password: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,10 +71,12 @@ pub struct MikrotikConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
+        let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+
         Ok(Config {
             app: AppConfig {
                 name: env::var("APP_NAME").unwrap_or_else(|_| "IT-Admin".to_string()),
-                env: env::var("APP_ENV").unwrap_or_else(|_| "development".to_string()),
+                env: app_env.clone(),
                 host: env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
                 port: env::var("APP_PORT")
                     .unwrap_or_else(|_| "8000".to_string())
@@ -94,9 +104,51 @@ impl Config {
                     .map(|s| s.trim().to_string())
                     .collect(),
             },
+            bootstrap_admin: Self::load_bootstrap_admin(),
+            docs_enabled: env::var("DOCS_ENABLED")
+                .map(|value| value == "true")
+                .unwrap_or(app_env != "production"),
             ad: Self::load_ad_config(),
             mikrotik: Self::load_mikrotik_config(),
         })
+    }
+
+    /// Проверяет конфигурацию на опасные для production значения.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.jwt.secret.len() < 32 {
+            return Err(
+                "JWT_SECRET должен содержать минимум 32 символа. Сгенерируйте значение, например: openssl rand -base64 48".to_string(),
+            );
+        }
+
+        if self.app.env == "production" && self.jwt.secret.contains("change-this") {
+            return Err(
+                "JWT_SECRET содержит значение из примера и не может использоваться в production"
+                    .to_string(),
+            );
+        }
+
+        if self.jwt.expiration <= 0 {
+            return Err("JWT_EXPIRATION должен быть положительным числом секунд".to_string());
+        }
+
+        if self.cors.allowed_origins.is_empty() {
+            return Err("CORS_ALLOWED_ORIGINS не должен быть пустым".to_string());
+        }
+
+        Ok(())
+    }
+
+    fn load_bootstrap_admin() -> Option<BootstrapAdmin> {
+        let email = env::var("BOOTSTRAP_ADMIN_EMAIL").ok();
+        let password = env::var("BOOTSTRAP_ADMIN_PASSWORD").ok();
+
+        match (email, password) {
+            (Some(email), Some(password)) if !email.is_empty() && !password.is_empty() => {
+                Some(BootstrapAdmin { email, password })
+            }
+            _ => None,
+        }
     }
 
     fn load_ad_config() -> Option<AdConfig> {
