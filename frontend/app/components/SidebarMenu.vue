@@ -4,6 +4,7 @@
     <SidebarMenuItem to="/analytics" icon="ri:bar-chart-line" label="Аналитика" />
     <SidebarMenuItem to="/employees" icon="ri:team-line" label="Сотрудники" />
     <SidebarMenuItem to="/computers" icon="ri:computer-line" label="Компьютеры" />
+    <SidebarMenuItem to="/inventory" icon="ri:task-line" label="Инвентаризация" />
     <SidebarMenuItem to="/monitoring" icon="ri:pulse-line" label="Мониторинг" />
     <SidebarMenuItem to="/software" icon="ri:apps-line" label="Программы" />
     <SidebarMenuItem to="/equipment" icon="ri:printer-line" label="Оборудование" />
@@ -21,6 +22,7 @@
     <template v-if="isAdmin">
       <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase text-gray-400">Администрирование</p>
       <SidebarMenuItem to="/admin/users" icon="ri:user-settings-line" label="Пользователи" />
+      <SidebarMenuItem to="/import" icon="ri:upload-cloud-2-line" label="Импорт из CSV" />
     </template>
   </div>
 </template>
