@@ -32,4 +32,8 @@ pub enum ApiTags {
     ActivityLog,
     /// WireGuard VPN management
     Wireguard,
+    /// Inventory sessions
+    Inventory,
+    /// CSV import
+    Import,
 }

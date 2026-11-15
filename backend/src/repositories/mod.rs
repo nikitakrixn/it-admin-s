@@ -6,6 +6,7 @@ pub mod consumable_repository;
 pub mod department_repository;
 pub mod employee_repository;
 pub mod equipment_repository;
+pub mod inventory_repository;
 pub mod license_pool_repository;
 pub mod monitoring_repository;
 pub mod network_repository;

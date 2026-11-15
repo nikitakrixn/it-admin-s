@@ -8,6 +8,8 @@ pub mod dashboard;
 pub mod department;
 pub mod employee;
 pub mod equipment;
+pub mod import;
+pub mod inventory;
 pub mod license_pool;
 pub mod monitoring;
 pub mod network;

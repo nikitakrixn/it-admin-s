@@ -9,6 +9,8 @@ pub mod departments;
 pub mod employees;
 pub mod equipment;
 pub mod health;
+pub mod imports;
+pub mod inventory;
 pub mod licenses;
 pub mod monitoring;
 pub mod network;

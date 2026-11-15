@@ -151,29 +151,37 @@ async fn main() -> Result<(), std::io::Error> {
             mikrotik_client.clone(),
         ));
 
-    // Create API service with OpenAPI documentation
+    // Create API service with OpenAPI documentation.
+    // poem-openapi реализует OpenApi для кортежей не длиннее 16 элементов,
+    // поэтому список API вложен: сначала основной набор, затем новые разделы.
+    let core_apis = (
+        routes::auth::AuthApi::new(auth_service.clone()),
+        routes::employees::EmployeesApi::new(db_pool.clone()),
+        routes::departments::DepartmentsApi::new(db_pool.clone()),
+        routes::positions::PositionsApi::new(db_pool.clone()),
+        routes::activity_log::ActivityLogApi::new(db_pool.clone()),
+        routes::software::SoftwareApi::new(db_pool.clone(), activity_log.clone()),
+        routes::computers::ComputersApi::new(db_pool.clone()),
+        routes::requests::RequestsApi::new(db_pool.clone()),
+        routes::consumables::ConsumablesApi::new(db_pool.clone()),
+        routes::equipment::EquipmentApi::new(db_pool.clone()),
+        routes::licenses::LicensesApi::new(db_pool.clone()),
+        routes::dashboard::DashboardApi::new(db_pool.clone()),
+        routes::network::NetworkApi::new(db_pool.clone()),
+        routes::ad::AdApi::new(db_pool.clone()),
+        routes::monitoring::MonitoringApi::new(db_pool.clone()),
+        routes::wireguard::WireguardApi::new(
+            db_pool.clone(),
+            wireguard_service.clone(),
+            mikrotik_client.clone(),
+        ),
+    );
+
     let api_service = OpenApiService::new(
         (
-            routes::auth::AuthApi::new(auth_service.clone()),
-            routes::employees::EmployeesApi::new(db_pool.clone()),
-            routes::departments::DepartmentsApi::new(db_pool.clone()),
-            routes::positions::PositionsApi::new(db_pool.clone()),
-            routes::activity_log::ActivityLogApi::new(db_pool.clone()),
-            routes::software::SoftwareApi::new(db_pool.clone(), activity_log.clone()),
-            routes::computers::ComputersApi::new(db_pool.clone()),
-            routes::requests::RequestsApi::new(db_pool.clone()),
-            routes::consumables::ConsumablesApi::new(db_pool.clone()),
-            routes::equipment::EquipmentApi::new(db_pool.clone()),
-            routes::licenses::LicensesApi::new(db_pool.clone()),
-            routes::dashboard::DashboardApi::new(db_pool.clone()),
-            routes::network::NetworkApi::new(db_pool.clone()),
-            routes::ad::AdApi::new(db_pool.clone()),
-            routes::monitoring::MonitoringApi::new(db_pool.clone()),
-            routes::wireguard::WireguardApi::new(
-                db_pool.clone(),
-                wireguard_service.clone(),
-                mikrotik_client.clone(),
-            ),
+            core_apis,
+            routes::inventory::InventoryApi::new(db_pool.clone()),
+            routes::imports::ImportApi::new(db_pool.clone()),
         ),
         &config.app.name,
         env!("CARGO_PKG_VERSION"),

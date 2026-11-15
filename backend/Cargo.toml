@@ -53,6 +53,7 @@ x25519-dalek = { version = "3.0.0", features = ["static_secrets", "getrandom"] }
 
 # Numeric (decimal) fields for monitoring metrics and monitor sizes
 bigdecimal = { version = "0.4", features = ["serde"] }
+csv = "1.3"
 
 [dev-dependencies]
 # Testing
