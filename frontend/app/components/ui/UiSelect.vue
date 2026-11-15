@@ -61,9 +61,19 @@ const emit = defineEmits<{
 const selectId = useId()
 
 const handleChange = (event: Event) => {
-  const target = event.target as HTMLSelectElement
-  const value = target.value === '' ? null : target.value
-  emit('update:modelValue', value)
+  const select = event.target as HTMLSelectElement
+  const option = select.selectedOptions[0] as (HTMLOptionElement & { _value?: unknown }) | undefined
+
+  // Vue хранит исходное значение `:value` в `_value`. Без этого числовые id
+  // из `<option :value="dept.id">` приходили бы строкой и бэкенд отклонял бы
+  // их как неверный тип.
+  const value = option && '_value' in option ? option._value : select.value
+
+  if (value === null || value === undefined || value === '') {
+    emit('update:modelValue', null)
+  } else if (typeof value === 'string' || typeof value === 'number') {
+    emit('update:modelValue', value)
+  }
 }
 
 const selectClasses = computed(() => {

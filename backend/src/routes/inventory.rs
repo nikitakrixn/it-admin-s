@@ -12,9 +12,8 @@ use crate::middleware::auth::{ClaimsExt, UserAuth};
 use crate::models::inventory::{
     CompleteInventoryAuditRequest, CreateInventoryAuditRequest, InventoryAudit,
     InventoryAuditDetailResponse, InventoryAuditListResponse, InventoryAuditResponse,
-    InventoryCounts, InventoryItemResponse, NewInventoryAudit, NewInventoryAuditItem,
-    UpdateInventoryAuditItem, UpdateInventoryItemRequest, is_valid_audit_type,
-    is_valid_item_status,
+    InventoryCounts, InventoryItemResponse, NewInventoryAudit, UpdateInventoryAuditItem,
+    UpdateInventoryItemRequest, is_valid_audit_type, is_valid_item_status,
 };
 use crate::repositories::inventory_repository::InventoryRepository;
 use crate::routes::api::ApiTags;
@@ -260,6 +259,15 @@ impl InventoryApi {
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
 
+        if let Some(value) = location.as_deref()
+            && value.chars().count() > 100
+        {
+            return InventoryCreateApiResponse::BadRequest(Json(
+                AppError::ValidationError("Расположение длиннее 100 символов".to_string())
+                    .to_error_response(),
+            ));
+        }
+
         let Some(user_id) = auth.0.user_id() else {
             return InventoryCreateApiResponse::BadRequest(Json(
                 AppError::Unauthorized("Не удалось определить пользователя".to_string())
@@ -301,27 +309,17 @@ impl InventoryApi {
             started_at: Some(now),
         };
 
-        let audit = match self.repository.create_audit(new_audit).await {
+        let item_count = snapshot.len();
+        let audit = match self
+            .repository
+            .create_audit_with_snapshot(new_audit, snapshot)
+            .await
+        {
             Ok(audit) => audit,
             Err(e) => {
                 return InventoryCreateApiResponse::InternalError(Json(e.to_error_response()));
             }
         };
-
-        let items: Vec<NewInventoryAuditItem> = snapshot
-            .into_iter()
-            .map(|(computer_id, expected_location)| NewInventoryAuditItem {
-                audit_id: audit.id,
-                entity_type: "computer".to_string(),
-                entity_id: computer_id,
-                expected_location,
-                status: "pending".to_string(),
-            })
-            .collect();
-
-        if let Err(e) = self.repository.create_items(&items).await {
-            return InventoryCreateApiResponse::InternalError(Json(e.to_error_response()));
-        }
 
         self.activity_log.log_with_details_async(
             Some(user_id),
@@ -331,7 +329,7 @@ impl InventoryApi {
             serde_json::json!({
                 "audit_name": audit.audit_name,
                 "audit_type": audit.audit_type,
-                "items": items.len(),
+                "items": item_count,
                 "location": audit.location,
             }),
         );
@@ -363,15 +361,16 @@ impl InventoryApi {
             ));
         }
 
-        if let Some(condition) = payload.actual_condition.as_deref()
-            && !CONDITION_VALUES.contains(&condition)
-        {
-            return InventoryItemApiResponse::BadRequest(Json(
-                AppError::ValidationError(
-                    "Состояние должно быть new, good, fair, poor или broken".to_string(),
-                )
-                .to_error_response(),
-            ));
+        if let Some(condition) = payload.actual_condition.as_deref() {
+            let condition = condition.trim();
+            if !condition.is_empty() && !CONDITION_VALUES.contains(&condition) {
+                return InventoryItemApiResponse::BadRequest(Json(
+                    AppError::ValidationError(
+                        "Состояние должно быть new, good, fair, poor или broken".to_string(),
+                    )
+                    .to_error_response(),
+                ));
+            }
         }
 
         let audit = match self.repository.get_audit(id).await {
@@ -398,23 +397,26 @@ impl InventoryApi {
             ));
         }
 
+        if let Some(value) = payload.actual_location.as_deref()
+            && value.trim().chars().count() > 100
+        {
+            return InventoryItemApiResponse::BadRequest(Json(
+                AppError::ValidationError(
+                    "Фактическое расположение длиннее 100 символов".to_string(),
+                )
+                .to_error_response(),
+            ));
+        }
+
         let user_id = auth.0.user_id();
         let checked = status != "pending";
         let changes = UpdateInventoryAuditItem {
             status: Some(status),
-            actual_location: payload
-                .actual_location
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty()),
-            actual_condition: payload
-                .actual_condition
-                .filter(|value| !value.trim().is_empty()),
-            discrepancy_notes: payload
-                .discrepancy_notes
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty()),
-            checked_at: checked.then(|| Utc::now().naive_utc()),
-            checked_by: if checked { user_id } else { None },
+            actual_location: clearable(payload.actual_location),
+            actual_condition: clearable(payload.actual_condition),
+            discrepancy_notes: clearable(payload.discrepancy_notes),
+            checked_at: Some(checked.then(|| Utc::now().naive_utc())),
+            checked_by: Some(if checked { user_id } else { None }),
         };
 
         match self.repository.update_item(id, item_id, changes).await {
@@ -487,49 +489,26 @@ impl InventoryApi {
             ));
         }
 
-        let items = match self.repository.get_items(id).await {
-            Ok(items) => items,
-            Err(e) => {
-                return InventoryFinishApiResponse::InternalError(Json(e.to_error_response()));
-            }
-        };
-
-        let mut counts = InventoryCounts::from_statuses(items.iter().map(|i| i.status.as_str()));
-        let pending = counts.pending();
         let user_id = auth.0.user_id();
+        let mark_pending_missing = payload.mark_pending_missing.unwrap_or(false);
 
-        if pending > 0 {
-            if payload.mark_pending_missing.unwrap_or(false) {
-                if let Err(e) = self.repository.mark_pending_missing(id, user_id).await {
-                    return InventoryFinishApiResponse::InternalError(Json(e.to_error_response()));
-                }
-                counts = match self.repository.get_items(id).await {
-                    Ok(items) => {
-                        InventoryCounts::from_statuses(items.iter().map(|i| i.status.as_str()))
-                    }
-                    Err(e) => {
-                        return InventoryFinishApiResponse::InternalError(Json(
-                            e.to_error_response(),
-                        ));
-                    }
-                };
-            } else {
+        let (audit, counts) = match self
+            .repository
+            .complete_audit(id, user_id, mark_pending_missing)
+            .await
+        {
+            Ok(result) => result,
+            Err(AppError::Conflict(message)) => {
                 return InventoryFinishApiResponse::Conflict(Json(
-                    AppError::Conflict(format!(
-                        "Осталось непроверенных позиций: {}. Отметьте их или завершите с пометкой «отсутствует»",
-                        pending
-                    ))
-                    .to_error_response(),
+                    AppError::Conflict(message).to_error_response(),
                 ));
             }
-        }
-
-        if let Err(e) = self.repository.save_counts(id, &counts).await {
-            return InventoryFinishApiResponse::InternalError(Json(e.to_error_response()));
-        }
-
-        let audit = match self.repository.set_status(id, "completed", true).await {
-            Ok(audit) => audit,
+            Err(AppError::NotFound(_)) => {
+                return InventoryFinishApiResponse::NotFound(Json(
+                    AppError::NotFound("Сессия инвентаризации не найдена".to_string())
+                        .to_error_response(),
+                ));
+            }
             Err(e) => {
                 return InventoryFinishApiResponse::InternalError(Json(e.to_error_response()));
             }
@@ -604,4 +583,14 @@ impl InventoryApi {
             Err(e) => InventoryFinishApiResponse::InternalError(Json(e.to_error_response())),
         }
     }
+}
+
+/// Пустая строка в форме означает «очистить поле», отсутствие поля —
+/// «не трогать»: быстрые кнопки меняют только статус и не должны стирать
+/// фактическое место и заметки.
+fn clearable(value: Option<String>) -> Option<Option<String>> {
+    value.map(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
 }

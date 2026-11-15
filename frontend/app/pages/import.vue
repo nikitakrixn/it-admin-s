@@ -228,6 +228,17 @@
             </div>
 
             <div
+              v-else-if="report.dry_run"
+              class="mt-4 p-4 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 flex items-start gap-2"
+            >
+              <Icon name="ri:information-line" class="text-lg flex-shrink-0 mt-0.5" />
+              <span>
+                Импортировать нечего: ни одна строка не готова к записи. Проверьте отчёт ниже и
+                исправьте ошибки в файле.
+              </span>
+            </div>
+
+            <div
               v-else-if="!report.dry_run"
               class="mt-4 p-4 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 flex items-start gap-2"
             >
@@ -533,7 +544,10 @@ const downloadTemplate = () => {
   link.href = url
   link.download =
     activeTab.value === 'employees' ? 'employees-template.csv' : 'computers-template.csv'
+  // Ссылка должна быть в документе: Safari игнорирует click() у detached-элемента.
+  document.body.appendChild(link)
   link.click()
+  link.remove()
   URL.revokeObjectURL(url)
   toast.success('Шаблон скачан')
 }

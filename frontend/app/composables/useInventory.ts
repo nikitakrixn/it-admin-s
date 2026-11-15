@@ -72,7 +72,7 @@ export interface CreateInventoryAuditPayload {
 export interface UpdateInventoryItemPayload {
   status: InventoryItemStatus
   actual_location?: string
-  actual_condition?: InventoryCondition
+  actual_condition?: InventoryCondition | ''
   discrepancy_notes?: string
 }
 

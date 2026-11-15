@@ -213,7 +213,10 @@
                       <p class="font-medium text-gray-900 truncate">
                         {{ item.entity_name || `Компьютер #${item.entity_id}` }}
                       </p>
-                      <p v-if="item.checked_at" class="text-xs text-gray-500">
+                      <p
+                        v-if="item.checked_at && item.status !== 'pending'"
+                        class="text-xs text-gray-500"
+                      >
                         Проверено {{ formatDateTime(item.checked_at) }}
                       </p>
                     </div>
@@ -658,9 +661,11 @@ const saveItemDetails = async () => {
   try {
     const updated = await updateItem(audit.value.id, editingItem.value.id, {
       status: itemForm.value.status,
-      actual_location: itemForm.value.actual_location.trim() || undefined,
-      actual_condition: itemForm.value.actual_condition || undefined,
-      discrepancy_notes: itemForm.value.discrepancy_notes.trim() || undefined,
+      // Пустые строки отправляем явно: бэкенд трактует их как «очистить»,
+      // а отсутствие поля — как «не трогать» (так работают быстрые кнопки).
+      actual_location: itemForm.value.actual_location.trim(),
+      actual_condition: itemForm.value.actual_condition,
+      discrepancy_notes: itemForm.value.discrepancy_notes.trim(),
     })
 
     replaceItem(updated)

@@ -89,24 +89,32 @@ pub struct InventoryAuditItem {
 
 #[derive(Debug, Insertable)]
 #[diesel(table_name = inventory_audit_items)]
+#[diesel(treat_none_as_default_value = false)]
 pub struct NewInventoryAuditItem {
     pub audit_id: i32,
     pub entity_type: String,
     pub entity_id: i32,
     pub expected_location: Option<String>,
     pub status: String,
+    /// Явно NULL: у колонки есть DEFAULT CURRENT_TIMESTAMP, и без этого поля
+    /// неотмеченная позиция выглядела бы проверенной.
+    pub checked_at: Option<NaiveDateTime>,
+    pub checked_by: Option<Uuid>,
 }
 
-/// Изменения позиции. `None` означает «поле не трогать».
+/// Изменения позиции.
+///
+/// Внешний `None` — «поле не трогать» (быстрые кнопки меняют только статус),
+/// внутренний `None` — «очистить значение» (пустая строка в форме).
 #[derive(Debug, AsChangeset)]
 #[diesel(table_name = inventory_audit_items)]
 pub struct UpdateInventoryAuditItem {
     pub status: Option<String>,
-    pub actual_location: Option<String>,
-    pub actual_condition: Option<String>,
-    pub discrepancy_notes: Option<String>,
-    pub checked_at: Option<NaiveDateTime>,
-    pub checked_by: Option<Uuid>,
+    pub actual_location: Option<Option<String>>,
+    pub actual_condition: Option<Option<String>>,
+    pub discrepancy_notes: Option<Option<String>>,
+    pub checked_at: Option<Option<NaiveDateTime>>,
+    pub checked_by: Option<Option<Uuid>>,
 }
 
 // ============================================================================

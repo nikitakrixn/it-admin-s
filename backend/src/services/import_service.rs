@@ -67,12 +67,16 @@ impl ImportService {
                 .load::<(i32, String)>(&mut conn)
                 .await?,
         );
-        let mut position_cache = load_named_ids(
-            positions::table
-                .select((positions::id, positions::name))
-                .load::<(i32, String)>(&mut conn)
-                .await?,
-        );
+        // Должность уникальна в пределах подразделения (UNIQUE(name, department_id)),
+        // поэтому кэш ключуется парой: иначе одноимённые должности разных отделов
+        // склеились бы в одну.
+        let mut position_cache: HashMap<(String, Option<i32>), Option<i32>> = positions::table
+            .select((positions::id, positions::name, positions::department_id))
+            .load::<(i32, String, Option<i32>)>(&mut conn)
+            .await?
+            .into_iter()
+            .map(|(id, name, department_id)| ((name.to_lowercase(), department_id), Some(id)))
+            .collect();
 
         for (row_number, row) in &table.rows {
             let parsed = match parse_employee_row(&columns, row) {
@@ -481,7 +485,7 @@ async fn resolve_department(
 
 async fn resolve_position(
     conn: &mut AsyncPgConnection,
-    cache: &mut HashMap<String, Option<i32>>,
+    cache: &mut HashMap<(String, Option<i32>), Option<i32>>,
     name: Option<&str>,
     department_id: Option<i32>,
     dry_run: bool,
@@ -489,7 +493,7 @@ async fn resolve_position(
     let Some(name) = name else {
         return Ok(None);
     };
-    let key = name.to_lowercase();
+    let key = (name.to_lowercase(), department_id);
 
     if let Some(id) = cache.get(&key) {
         return Ok(*id);
@@ -759,12 +763,15 @@ fn parse_employee_row(columns: &EmployeeColumns, row: &[String]) -> Result<Parse
 fn normalize_employee_status(raw: &str) -> Result<String, String> {
     let status = match normalize(raw).as_str() {
         "active" | "активен" | "активный" | "работает" => "active",
-        "inactive" | "неактивен" | "неактивный" | "уволен" => "inactive",
+        "inactive" | "неактивен" | "неактивный" => "inactive",
         "vacation" | "отпуск" => "vacation",
         "sickleave" | "больничный" => "sick_leave",
+        // В базе и интерфейсе уволенный сотрудник — отдельный статус, а не
+        // «неактивный»: иначе карточка теряет причину и дату увольнения.
+        "terminated" | "уволен" | "уволена" => "terminated",
         _ => {
             return Err(format!(
-                "неизвестный статус «{}» (допустимы active, inactive, vacation, sick_leave)",
+                "неизвестный статус «{}» (допустимы active, inactive, vacation, sick_leave, terminated)",
                 raw
             ));
         }
@@ -1096,6 +1103,11 @@ mod tests {
             normalize_employee_status("Больничный").unwrap(),
             "sick_leave"
         );
+        assert_eq!(normalize_employee_status("Уволен").unwrap(), "terminated");
+        assert_eq!(
+            normalize_employee_status("terminated").unwrap(),
+            "terminated"
+        );
         assert!(normalize_employee_status("декрет").is_err());
     }
 
@@ -1105,6 +1117,33 @@ mod tests {
         let table = CsvTable::parse(content).expect("файл должен разобраться");
 
         assert!(ComputerColumns::new(&table).is_err());
+    }
+
+    #[test]
+    fn explains_duplicate_key_constraints() {
+        let email = AppError::DatabaseError(
+            "UniqueViolation: duplicate key value violates unique constraint \"employees_email_key\""
+                .to_string(),
+        );
+        assert_eq!(friendly_db_error(&email), "email уже занят другой записью");
+
+        let hostname = AppError::DatabaseError(
+            "UniqueViolation: duplicate key value violates unique constraint \"computers_hostname_key\""
+                .to_string(),
+        );
+        assert_eq!(
+            friendly_db_error(&hostname),
+            "имя компьютера уже занято другой записью"
+        );
+
+        let other = AppError::DatabaseError(
+            "UniqueViolation: duplicate key value violates unique constraint \"some_other_key\""
+                .to_string(),
+        );
+        assert_eq!(
+            friendly_db_error(&other),
+            "нарушено ограничение уникальности"
+        );
     }
 
     #[test]

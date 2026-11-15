@@ -57,8 +57,10 @@ impl From<diesel::result::Error> for AppError {
     fn from(err: diesel::result::Error) -> Self {
         match err {
             diesel::result::Error::NotFound => AppError::NotFound("Resource not found".to_string()),
-            diesel::result::Error::DatabaseError(kind, _info) => {
-                AppError::DatabaseError(format!("Database error: {:?}", kind))
+            diesel::result::Error::DatabaseError(kind, info) => {
+                // Текст драйвера содержит имя нарушенного ограничения, по нему
+                // импорт строит понятное сообщение вместо «UniqueViolation».
+                AppError::DatabaseError(format!("{:?}: {}", kind, info.message()))
             }
             _ => AppError::DatabaseError(err.to_string()),
         }
@@ -106,5 +108,56 @@ mod tests {
         let error = AppError::from(diesel::result::Error::NotFound);
 
         assert!(matches!(error, AppError::NotFound(_)));
+    }
+
+    #[derive(Debug)]
+    struct TestErrorInfo(&'static str);
+
+    impl diesel::result::DatabaseErrorInformation for TestErrorInfo {
+        fn message(&self) -> &str {
+            self.0
+        }
+
+        fn details(&self) -> Option<&str> {
+            None
+        }
+
+        fn hint(&self) -> Option<&str> {
+            None
+        }
+
+        fn table_name(&self) -> Option<&str> {
+            None
+        }
+
+        fn column_name(&self) -> Option<&str> {
+            None
+        }
+
+        fn constraint_name(&self) -> Option<&str> {
+            Some("employees_email_key")
+        }
+
+        fn statement_position(&self) -> Option<i32> {
+            None
+        }
+    }
+
+    #[test]
+    fn keeps_database_error_message_and_constraint() {
+        let error = AppError::from(diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::UniqueViolation,
+            Box::new(TestErrorInfo(
+                "duplicate key value violates unique constraint \"employees_email_key\"",
+            )),
+        ));
+
+        let text = error.to_string();
+        assert!(text.contains("duplicate key"), "text: {text}");
+        assert!(text.contains("employees_email_key"), "text: {text}");
+        assert!(
+            !text.contains("Database error: Database error"),
+            "text: {text}"
+        );
     }
 }

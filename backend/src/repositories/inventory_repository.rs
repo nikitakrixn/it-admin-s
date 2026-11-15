@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::config::database::Pool;
@@ -12,6 +12,7 @@ use crate::models::inventory::{
 };
 use crate::models::schema::{computers, employees, inventory_audit_items, inventory_audits, users};
 use crate::utils::db_helpers::{DbResult, get_connection};
+use crate::utils::error::AppError;
 
 pub struct InventoryRepository {
     pool: Pool,
@@ -102,28 +103,44 @@ impl InventoryRepository {
             .map_err(Into::into)
     }
 
-    pub async fn create_audit(&self, new_audit: NewInventoryAudit) -> DbResult<InventoryAudit> {
+    /// Создаёт сессию и её позиции одной транзакцией: половина снимка без
+    /// сессии (или наоборот) оставила бы мусор в базе.
+    pub async fn create_audit_with_snapshot(
+        &self,
+        new_audit: NewInventoryAudit,
+        snapshot: Vec<(i32, Option<String>)>,
+    ) -> DbResult<InventoryAudit> {
         let mut conn = get_connection(&self.pool).await?;
 
-        diesel::insert_into(inventory_audits::table)
-            .values(&new_audit)
-            .get_result::<InventoryAudit>(&mut conn)
-            .await
-            .map_err(Into::into)
-    }
+        conn.transaction(async |conn| {
+            let audit = diesel::insert_into(inventory_audits::table)
+                .values(&new_audit)
+                .get_result::<InventoryAudit>(conn)
+                .await?;
 
-    pub async fn create_items(&self, items: &[NewInventoryAuditItem]) -> DbResult<usize> {
-        if items.is_empty() {
-            return Ok(0);
-        }
+            let items: Vec<NewInventoryAuditItem> = snapshot
+                .iter()
+                .map(|(entity_id, expected_location)| NewInventoryAuditItem {
+                    audit_id: audit.id,
+                    entity_type: "computer".to_string(),
+                    entity_id: *entity_id,
+                    expected_location: expected_location.clone(),
+                    status: "pending".to_string(),
+                    checked_at: None,
+                    checked_by: None,
+                })
+                .collect();
 
-        let mut conn = get_connection(&self.pool).await?;
+            if !items.is_empty() {
+                diesel::insert_into(inventory_audit_items::table)
+                    .values(&items)
+                    .execute(conn)
+                    .await?;
+            }
 
-        diesel::insert_into(inventory_audit_items::table)
-            .values(items)
-            .execute(&mut conn)
-            .await
-            .map_err(Into::into)
+            Ok(audit)
+        })
+        .await
     }
 
     /// Снимок компьютеров для новой сессии: id и учётное расположение.
@@ -173,28 +190,66 @@ impl InventoryRepository {
         .map_err(Into::into)
     }
 
-    /// Помечает все непроверенные позиции сессии как отсутствующие.
-    pub async fn mark_pending_missing(
+    /// Завершает сессию одной транзакцией: отметка непроверенных, подсчёт
+    /// итогов и смена статуса не должны разъезжаться при сбое на середине.
+    ///
+    /// Если остались непроверенные позиции и их не разрешено пометить
+    /// отсутствующими, возвращает `Conflict`.
+    pub async fn complete_audit(
         &self,
         audit_id: i32,
         user_id: Option<Uuid>,
-    ) -> DbResult<usize> {
+        mark_pending_missing: bool,
+    ) -> DbResult<(InventoryAudit, InventoryCounts)> {
         let mut conn = get_connection(&self.pool).await?;
         let now = Utc::now().naive_utc();
 
-        diesel::update(
-            inventory_audit_items::table
+        conn.transaction(async |conn| {
+            if mark_pending_missing {
+                diesel::update(
+                    inventory_audit_items::table
+                        .filter(inventory_audit_items::audit_id.eq(audit_id))
+                        .filter(inventory_audit_items::status.eq("pending")),
+                )
+                .set((
+                    inventory_audit_items::status.eq("missing"),
+                    inventory_audit_items::checked_at.eq(Some(now)),
+                    inventory_audit_items::checked_by.eq(user_id),
+                ))
+                .execute(conn)
+                .await?;
+            }
+
+            let statuses = inventory_audit_items::table
                 .filter(inventory_audit_items::audit_id.eq(audit_id))
-                .filter(inventory_audit_items::status.eq("pending")),
-        )
-        .set((
-            inventory_audit_items::status.eq("missing"),
-            inventory_audit_items::checked_at.eq(Some(now)),
-            inventory_audit_items::checked_by.eq(user_id),
-        ))
-        .execute(&mut conn)
+                .select(inventory_audit_items::status)
+                .load::<String>(conn)
+                .await?;
+
+            let counts = InventoryCounts::from_statuses(statuses.iter().map(String::as_str));
+            let pending = counts.pending();
+            if pending > 0 {
+                return Err(AppError::Conflict(format!(
+                    "Осталось непроверенных позиций: {}. Отметьте их или завершите с пометкой «отсутствует»",
+                    pending
+                )));
+            }
+
+            let audit = diesel::update(inventory_audits::table.find(audit_id))
+                .set((
+                    inventory_audits::total_items.eq(Some(counts.total as i32)),
+                    inventory_audits::found_items.eq(Some(counts.found as i32)),
+                    inventory_audits::missing_items.eq(Some(counts.missing as i32)),
+                    inventory_audits::damaged_items.eq(Some(counts.damaged as i32)),
+                    inventory_audits::status.eq(Some("completed".to_string())),
+                    inventory_audits::completed_at.eq(Some(now)),
+                ))
+                .get_result::<InventoryAudit>(conn)
+                .await?;
+
+            Ok((audit, counts))
+        })
         .await
-        .map_err(Into::into)
     }
 
     pub async fn set_status(
@@ -214,23 +269,6 @@ impl InventoryRepository {
             .get_result::<InventoryAudit>(&mut conn)
             .await
             .map_err(Into::into)
-    }
-
-    /// Сохраняет итоговые счётчики в сессии — они нужны для отчётов.
-    pub async fn save_counts(&self, audit_id: i32, counts: &InventoryCounts) -> DbResult<()> {
-        let mut conn = get_connection(&self.pool).await?;
-
-        diesel::update(inventory_audits::table.find(audit_id))
-            .set((
-                inventory_audits::total_items.eq(Some(counts.total as i32)),
-                inventory_audits::found_items.eq(Some(counts.found as i32)),
-                inventory_audits::missing_items.eq(Some(counts.missing as i32)),
-                inventory_audits::damaged_items.eq(Some(counts.damaged as i32)),
-            ))
-            .execute(&mut conn)
-            .await?;
-
-        Ok(())
     }
 
     /// Названия и инвентарные номера компьютеров для карточек позиций.
