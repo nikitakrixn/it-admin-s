@@ -130,25 +130,25 @@ export const useEmployees = () => {
   // ============================================================================
 
   const fetchDepartments = async () => {
-    return await $api<Department[]>('/employees/departments')
+    return await $api<Department[]>('/departments')
   }
 
   const createDepartment = async (data: { name: string; description?: string }) => {
-    return await $api<Department>('/employees/departments', {
+    return await $api<Department>('/departments', {
       method: 'POST',
       body: data,
     })
   }
 
   const updateDepartment = async (id: number, data: { name?: string; description?: string }) => {
-    return await $api<Department>(`/employees/departments/${id}`, {
+    return await $api<Department>(`/departments/${id}`, {
       method: 'PUT',
       body: data,
     })
   }
 
   const deleteDepartment = async (id: number) => {
-    return await $api(`/employees/departments/${id}`, {
+    return await $api(`/departments/${id}`, {
       method: 'DELETE',
     })
   }
@@ -158,25 +158,25 @@ export const useEmployees = () => {
   // ============================================================================
 
   const fetchPositions = async () => {
-    return await $api<Position[]>('/employees/positions')
+    return await $api<Position[]>('/positions')
   }
 
   const createPosition = async (data: { name: string; department_id?: number }) => {
-    return await $api<Position>('/employees/positions', {
+    return await $api<Position>('/positions', {
       method: 'POST',
       body: data,
     })
   }
 
   const updatePosition = async (id: number, data: { name?: string; department_id?: number }) => {
-    return await $api<Position>(`/employees/positions/${id}`, {
+    return await $api<Position>(`/positions/${id}`, {
       method: 'PUT',
       body: data,
     })
   }
 
   const deletePosition = async (id: number) => {
-    return await $api(`/employees/positions/${id}`, {
+    return await $api(`/positions/${id}`, {
       method: 'DELETE',
     })
   }
