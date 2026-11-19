@@ -42,11 +42,12 @@ export interface InventoryItem {
   expected_location: string | null
   actual_location: string | null
   expected_condition: string | null
-  actual_condition: string | null
+  actual_condition: InventoryCondition | null
   status: InventoryItemStatus
   discrepancy_notes: string | null
   checked_at: string | null
   checked_by: string | null
+  checked_by_email: string | null
 }
 
 export interface InventoryAuditListResponse {
@@ -121,6 +122,33 @@ export const CONDITION_LABELS: Record<InventoryCondition, string> = {
   fair: 'Удовлетворительное',
   poor: 'Плохое',
   broken: 'Неисправное',
+}
+
+/**
+ * Считает сводку по позициям локально.
+ *
+ * `relocated` и `surplus` считаются найденными: оборудование физически есть,
+ * просто лежит не там, где записано. `audit.counts` для этого не годится —
+ * они заполняются только при завершении сессии.
+ */
+export const summarizeInventory = (items: InventoryItem[]): InventoryCounts => {
+  const counts: InventoryCounts = { total: 0, checked: 0, found: 0, missing: 0, damaged: 0 }
+
+  for (const item of items) {
+    counts.total += 1
+    if (item.status === 'pending') continue
+
+    counts.checked += 1
+    if (item.status === 'missing') {
+      counts.missing += 1
+    } else if (item.status === 'damaged') {
+      counts.damaged += 1
+    } else {
+      counts.found += 1
+    }
+  }
+
+  return counts
 }
 
 export const useInventory = () => {

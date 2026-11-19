@@ -6,6 +6,7 @@ use poem_openapi::{
     param::{Path, Query},
     payload::Json,
 };
+use uuid::Uuid;
 
 use crate::config::database::Pool;
 use crate::middleware::auth::{ClaimsExt, UserAuth};
@@ -117,9 +118,16 @@ impl InventoryApi {
             .map(|(id, hostname, inventory_number)| (id, (hostname, inventory_number)))
             .collect();
 
+        // Email нужны и автору сессии, и тем, кто отмечал позиции: иначе
+        // в отчёте останутся технические UUID.
+        let mut user_ids: Vec<Uuid> = items.iter().filter_map(|item| item.checked_by).collect();
+        user_ids.push(audit.audited_by);
+        user_ids.sort();
+        user_ids.dedup();
+
         let emails: HashMap<String, String> = self
             .repository
-            .get_user_emails(&[audit.audited_by])
+            .get_user_emails(&user_ids)
             .await?
             .into_iter()
             .map(|(id, email)| (id.to_string(), email))
@@ -132,7 +140,15 @@ impl InventoryApi {
             .map(|item| {
                 let (entity_name, entity_inventory_number) =
                     labels.get(&item.entity_id).cloned().unwrap_or((None, None));
-                InventoryItemResponse::from_item(item, entity_name, entity_inventory_number)
+                let checked_by_email = item
+                    .checked_by
+                    .and_then(|id| emails.get(&id.to_string()).cloned());
+                InventoryItemResponse::from_item(
+                    item,
+                    entity_name,
+                    entity_inventory_number,
+                    checked_by_email,
+                )
             })
             .collect();
 
@@ -410,6 +426,7 @@ impl InventoryApi {
 
         let user_id = auth.0.user_id();
         let checked = status != "pending";
+        let checked_by_email = checked.then(|| auth.0.email.clone());
         let changes = UpdateInventoryAuditItem {
             status: Some(status),
             actual_location: clearable(payload.actual_location),
@@ -447,6 +464,7 @@ impl InventoryApi {
                     item,
                     name,
                     inventory_number,
+                    checked_by_email,
                 )))
             }
             Err(AppError::NotFound(_)) => InventoryItemApiResponse::NotFound(Json(

@@ -50,15 +50,21 @@
             </div>
           </div>
 
-          <div v-if="isActive" class="flex items-center gap-3">
-            <button class="btn btn-secondary" @click="showCancelModal = true">
-              <Icon name="ri:close-circle-line" class="mr-2" />
-              Отменить
+          <div class="flex items-center gap-3">
+            <button class="btn btn-secondary" @click="exportReport">
+              <Icon name="ri:download-2-line" class="mr-2" />
+              Скачать CSV
             </button>
-            <button class="btn btn-primary" @click="openCompleteModal">
-              <Icon name="ri:checkbox-circle-line" class="mr-2" />
-              Завершить
-            </button>
+            <template v-if="isActive">
+              <button class="btn btn-secondary" @click="showCancelModal = true">
+                <Icon name="ri:close-circle-line" class="mr-2" />
+                Отменить
+              </button>
+              <button class="btn btn-primary" @click="openCompleteModal">
+                <Icon name="ri:checkbox-circle-line" class="mr-2" />
+                Завершить
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -215,9 +221,12 @@
                       </p>
                       <p
                         v-if="item.checked_at && item.status !== 'pending'"
-                        class="text-xs text-gray-500"
+                        class="text-xs text-gray-500 truncate"
                       >
                         Проверено {{ formatDateTime(item.checked_at) }}
+                        <template v-if="item.checked_by_email">
+                          · {{ item.checked_by_email }}
+                        </template>
                       </p>
                     </div>
                   </div>
@@ -471,8 +480,11 @@ import {
   CONDITION_LABELS,
   ITEM_STATUS_COLORS,
   ITEM_STATUS_LABELS,
+  summarizeInventory,
   useInventory,
 } from '~/composables/useInventory'
+import { downloadCsv } from '~/utils/csv'
+import { buildInventoryReportCsv } from '~/utils/inventoryReport'
 
 definePageMeta({
   middleware: 'auth',
@@ -515,31 +527,9 @@ const audit = computed(() => detail.value?.audit ?? null)
 const items = computed(() => detail.value?.items ?? [])
 const isActive = computed(() => audit.value?.status === 'in_progress')
 
-/**
- * Считаем сводку по локальному списку, а не берём audit.counts: после каждой
- * отметки сервер возвращает только позицию, и счётчики иначе отставали бы
- * от таблицы до перезагрузки страницы.
- */
-const counts = computed(() => {
-  const result = { total: 0, checked: 0, found: 0, missing: 0, damaged: 0 }
-
-  for (const item of items.value) {
-    result.total += 1
-    if (item.status === 'pending') continue
-
-    result.checked += 1
-    if (item.status === 'missing') {
-      result.missing += 1
-    } else if (item.status === 'damaged') {
-      result.damaged += 1
-    } else {
-      // relocated и surplus тоже считаются найденными — техника физически есть.
-      result.found += 1
-    }
-  }
-
-  return result
-})
+// audit.counts заполняются только при завершении сессии, а таблица живёт
+// локально: после каждой отметки сервер возвращает одну позицию.
+const counts = computed(() => summarizeInventory(items.value))
 
 const pendingCount = computed(() => counts.value.total - counts.value.checked)
 
@@ -567,25 +557,12 @@ const filteredItems = computed(() => {
   return result
 })
 
-const formatDate = (value: string | null) => {
-  if (!value) return '—'
-  const [date] = value.split('T')
-  const [year, month, day] = date.split('-')
-  return year && month && day ? `${day}.${month}.${year}` : date
-}
+const exportReport = () => {
+  if (!audit.value) return
 
-const formatDateTime = (value: string | null) => {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return formatDate(value)
-
-  return date.toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const csv = buildInventoryReportCsv(audit.value, items.value)
+  downloadCsv(`inventory-${audit.value.id}-${audit.value.audit_date}.csv`, csv)
+  toast.success('Отчёт скачан')
 }
 
 const replaceItem = (updated: InventoryItem) => {
@@ -645,7 +622,7 @@ const openItemModal = (item: InventoryItem) => {
   itemForm.value = {
     status: item.status,
     actual_location: item.actual_location ?? item.expected_location ?? '',
-    actual_condition: (item.actual_condition as InventoryCondition | null) ?? '',
+    actual_condition: item.actual_condition ?? '',
     discrepancy_notes: item.discrepancy_notes ?? '',
   }
   itemError.value = ''

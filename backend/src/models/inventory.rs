@@ -266,6 +266,8 @@ pub struct InventoryItemResponse {
     pub discrepancy_notes: Option<String>,
     pub checked_at: Option<String>,
     pub checked_by: Option<String>,
+    /// Email проверившего: в отчёте и интерфейсе UUID бесполезен.
+    pub checked_by_email: Option<String>,
 }
 
 impl InventoryItemResponse {
@@ -273,6 +275,7 @@ impl InventoryItemResponse {
         item: InventoryAuditItem,
         entity_name: Option<String>,
         entity_inventory_number: Option<String>,
+        checked_by_email: Option<String>,
     ) -> Self {
         Self {
             id: item.id,
@@ -291,6 +294,7 @@ impl InventoryItemResponse {
                 .checked_at
                 .map(|d| d.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()),
             checked_by: item.checked_by.map(|id| id.to_string()),
+            checked_by_email,
         }
     }
 }
